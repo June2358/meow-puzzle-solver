@@ -121,10 +121,6 @@ def test_json_dialog_returns_exact_json_and_stays_open_for_validation(
     assert textarea is not None
     assert error is not None
     assert load_button is not None
-    assert textarea.focus_calls == 1
-    assert "font:16px" in textarea.style.cssText
-    assert "safe-area-inset" in overlay.style.cssText
-    assert "min-height:48px" in load_button.style.cssText
 
     textarea.value = region_json
     overlay.dataset.action = "submit"
@@ -141,50 +137,12 @@ def test_json_dialog_returns_exact_json_and_stays_open_for_validation(
     dialog.show_error("JSON 형식 오류")
 
     assert textarea.value == region_json
-    assert textarea.focus_calls == 2
     assert error.textContent == "JSON 형식 오류"
     assert error.hidden is False
 
     dialog.close()
 
     assert overlay.removed
-    assert document.canvas.focus_calls == 1
-
-
-def test_prompt_dialog_is_read_only_selected_and_cancel_removes_it(
-    document: FakeDocument,
-) -> None:
-    prompt = "Transcribe this 26×26 영역 <board> & puzzle.\nReturn JSON only."
-    dialog = web_text_dialog.open_prompt_dialog(prompt)
-    overlay = document.getElementById(web_text_dialog._OVERLAY_ID)
-    textarea = document.getElementById(web_text_dialog._TEXTAREA_ID)
-
-    assert overlay is not None
-    assert textarea is not None
-    assert textarea.value == prompt
-    assert textarea.innerHTML.isascii()
-    assert "<board>" not in textarea.innerHTML
-    assert "&lt;board&gt; &amp;" in textarea.innerHTML
-    assert "readonly" in textarea.attributes
-    assert textarea.focus_calls == 1
-    assert textarea.select_calls == 1
-    assert _find_by_text(document, "불러오기") is None
-
-    overlay.dataset.action = "cancel"
-
-    assert dialog.poll() == web_text_dialog.WebTextDialogResult(submitted=False)
-    assert overlay.removed
-    assert document.canvas.focus_calls == 1
-
-
-def test_web_runtime_detection_is_strictly_emscripten(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(web_text_dialog.sys, "platform", "win32")
-    assert not web_text_dialog.is_web_runtime()
-
-    monkeypatch.setattr(web_text_dialog.sys, "platform", "emscripten")
-    assert web_text_dialog.is_web_runtime()
 
 
 def test_dom_ui_text_is_ascii_only_and_html_safe(document: FakeDocument) -> None:

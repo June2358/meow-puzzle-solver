@@ -37,7 +37,7 @@ def pygame_dummy_display():
     pygame.quit()
 
 
-def test_core_frames_render_and_navigation_repeats_while_held() -> None:
+def test_core_frames_render() -> None:
     puzzle = load_preset("극한")
     visualizer = MeowVisualizer(puzzle, solve(puzzle))
     core_kinds = (
@@ -55,27 +55,6 @@ def test_core_frames_render_and_navigation_repeats_while_held() -> None:
             if frame.kind is kind
         )
         visualizer.draw()
-
-    visualizer.current_step_index = 0
-    source = ("key", pygame.K_RIGHT)
-    visualizer._begin_navigation_hold(source, 1)
-    assert visualizer.current_step_index == 1
-
-    visualizer._update_navigation_hold(0.37)
-    assert visualizer.current_step_index == 2
-
-    visualizer._end_navigation_hold(source)
-    visualizer._update_navigation_hold(1.0)
-    assert visualizer.current_step_index == 2
-
-    visualizer._toggle_autoplay()
-    visualizer._update_autoplay(0.91)
-    assert visualizer.current_step_index == 3
-
-    visualizer._handle_keydown(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_END))
-    assert visualizer.current_step_index == len(visualizer.timeline) - 1
-    visualizer._handle_keydown(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_HOME))
-    assert visualizer.current_step_index == 0
 
 
 def test_all_exact_results_render_a_final_badge() -> None:

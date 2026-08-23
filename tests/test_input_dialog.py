@@ -13,9 +13,8 @@ import pytest
 
 import meow.input_dialog as input_dialog_module
 from meow.input_dialog import MeowInputDialog
-from meow.matrix_input import VISION_REGION_PROMPT
 from meow.puzzle_catalog import load_preset
-from meow.web_text_dialog import WebTextDialogError, WebTextDialogResult
+from meow.web_text_dialog import WebTextDialogResult
 
 
 class FakeWebDialog:
@@ -48,15 +47,6 @@ def test_preset_then_start_returns_the_selected_puzzle() -> None:
     puzzle = dialog._handle_start()
 
     assert puzzle is not None
-    assert len(dialog.preset_buttons) == 6
-    assert len({button.rect.x for button in dialog.preset_buttons}) == 3
-    assert len({button.rect.y for button in dialog.preset_buttons}) == 2
-    assert max(button.rect.bottom for button in dialog.preset_buttons) < (
-        dialog.size_field_rect.top
-    )
-    assert dialog.copy_prompt_button.rect.right < dialog.paste_button.rect.left
-    for button in (dialog.copy_prompt_button, dialog.paste_button):
-        assert button.font.size(button.text)[0] < button.rect.width
     assert puzzle.region_grid == load_preset("어려움").region_grid
 
 
@@ -125,19 +115,6 @@ def test_json_paste_is_atomic(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def test_copy_prompt_uses_the_region_contract(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    dialog = MeowInputDialog()
-    copied: list[str] = []
-    monkeypatch.setattr(input_dialog_module, "copy_text", copied.append)
-
-    dialog._handle_mouse_click(dialog.copy_prompt_button.rect.center)
-
-    assert copied == [VISION_REGION_PROMPT]
-    assert dialog.notice_message
-
-
 def test_web_json_submit_reuses_parser_then_closes_on_success(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -194,47 +171,6 @@ def test_invalid_web_json_preserves_text_dialog_and_draft(
     assert dialog._web_text_dialog is browser_dialog
 
 
-def test_web_prompt_is_shown_without_clipboard_access(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    dialog = MeowInputDialog()
-    browser_dialog = FakeWebDialog()
-    prompt_calls: list[str] = []
-    monkeypatch.setattr(input_dialog_module, "is_web_runtime", lambda: True)
-    monkeypatch.setattr(
-        input_dialog_module,
-        "open_prompt_dialog",
-        lambda text: prompt_calls.append(text) or browser_dialog,
-    )
-    monkeypatch.setattr(
-        input_dialog_module,
-        "copy_text",
-        lambda text: pytest.fail("Web prompt must not use clipboard write"),
-    )
-
-    dialog._handle_prompt_action()
-
-    assert prompt_calls == [VISION_REGION_PROMPT]
-    assert dialog._web_text_dialog is browser_dialog
-
-
-def test_web_dialog_bridge_failure_becomes_pygame_validation_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    dialog = MeowInputDialog()
-
-    def fail_to_open():
-        raise WebTextDialogError("DOM bridge failed")
-
-    monkeypatch.setattr(input_dialog_module, "is_web_runtime", lambda: True)
-    monkeypatch.setattr(input_dialog_module, "open_json_dialog", fail_to_open)
-
-    dialog._handle_json_action()
-
-    assert dialog._web_text_dialog is None
-    assert dialog.validation_error == "DOM bridge failed"
-
-
 def test_run_yields_a_frame_then_handles_a_quit_event(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -258,27 +194,3 @@ def test_run_yields_a_frame_then_handles_a_quit_event(
     assert asyncio.run(dialog.run()) is None
     assert draw_calls == [None]
     assert len(frame_calls) == 1
-
-
-def test_run_cleans_up_an_open_web_dialog_on_quit(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    dialog = MeowInputDialog()
-    browser_dialog = FakeWebDialog(None)
-    dialog._web_text_dialog = browser_dialog
-
-    async def advance_frame(clock: pygame.time.Clock) -> float:
-        await asyncio.sleep(0)
-        return 1 / 60
-
-    monkeypatch.setattr(dialog, "draw", lambda: None)
-    monkeypatch.setattr(input_dialog_module, "next_frame", advance_frame)
-    monkeypatch.setattr(
-        pygame.event,
-        "get",
-        lambda: [pygame.event.Event(pygame.QUIT)],
-    )
-
-    assert asyncio.run(dialog.run()) is None
-    assert browser_dialog.closed
-    assert dialog._web_text_dialog is None

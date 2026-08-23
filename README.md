@@ -7,19 +7,39 @@ LinkedIn Queens 형식의 고양이 퍼즐 솔버입니다. 기본 로직의 각
 별도의 Exact verifier가 입력을 `UNIQUE`, `MULTIPLE`, `UNSOLVABLE`로
 분류합니다. 솔버는 verifier가 찾은 해 좌표를 읽지 않습니다.
 
-## 실행
+## 요구 환경과 실행
 
-화면 UI는 `pygame-ce 2.5.8`을 사용합니다. 패키지 이름은 `pygame-ce`지만
-Python 모듈 이름은 기존과 동일한 `pygame`입니다.
+- Windows 10/11
+- Python 3.12.2 (현재 Pygbag 브라우저 런타임과 동일)
+- pygame-ce 2.5.8
+- [uv](https://docs.astral.sh/uv/)
+
+최초 환경 준비:
 
 ```powershell
-pixi run start
-pixi run test
-pixi run check
+uv sync
 ```
 
-`pixi run start`와 `python -m meow`는 같은 GUI를 엽니다. 문제 입력과 풀이
-재생은 한 앱 안에서 왕복합니다.
+실행:
+
+```powershell
+uv run python -m meow
+```
+
+전체 테스트와 정적 검사는 다음과 같이 실행합니다.
+
+```powershell
+uv run ruff check .
+uv run ruff format --check .
+uv run python -m pytest -q -W error
+```
+
+추후 Web 포팅에서 사용할 Pygbag 빌드 도구는 Desktop 런타임과 분리된
+`web` 의존성 그룹에 있습니다.
+
+```powershell
+uv sync --group web
+```
 
 ### 기본 프리셋
 

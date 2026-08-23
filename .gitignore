@@ -6,7 +6,6 @@ build/
 dist/
 
 # Local environments and test caches
-.pixi/
 .venv/
 venv/
 .pytest_cache/

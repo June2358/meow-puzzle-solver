@@ -39,6 +39,10 @@ RED_LIGHT = (254, 202, 202)
 ORANGE = (194, 65, 12)
 ORANGE_LIGHT = (254, 215, 170)
 
+_FONT_DIR = Path(__file__).parent / "assets" / "fonts"
+_REGULAR_FONT_PATH = _FONT_DIR / "Pretendard-Regular.otf"
+_SEMIBOLD_FONT_PATH = _FONT_DIR / "Pretendard-SemiBold.otf"
+
 
 @dataclass(frozen=True, slots=True)
 class Fonts:
@@ -47,56 +51,30 @@ class Fonts:
     number: pygame.font.Font
     body: pygame.font.Font
     candidate: pygame.font.Font
+    button: pygame.font.Font
     heading: pygame.font.Font
     title: pygame.font.Font
 
 
-@cache
-def _find_korean_font_paths() -> tuple[str, str] | None:
-    families = (
-        ("pretendardregular", "pretendardsemibold"),
-        ("malgungothic", "malgungothic"),
-        ("notosanskrregular", "notosanskrsemibold"),
-        ("notosanscjkkr", "notosanscjkkr"),
-        ("nanumgothic", "nanumgothic"),
-    )
-    for regular_name, emphasis_name in families:
-        regular_path = pygame.font.match_font(regular_name)
-        if not regular_path or not Path(regular_path).is_file():
-            continue
-        emphasis_path = pygame.font.match_font(emphasis_name)
-        if not emphasis_path or not Path(emphasis_path).is_file():
-            emphasis_path = regular_path
-        return regular_path, emphasis_path
-    return None
+def _load_bundled_font(path: Path, size: int) -> pygame.font.Font:
+    """Load one exact bundled Pretendard weight."""
+
+    return pygame.font.Font(str(path), size)
 
 
 def get_fonts() -> Fonts:
-    """Create legible font roles with a deterministic Korean-capable fallback."""
+    """Create deterministic font roles shared by Desktop and Web."""
 
     if not pygame.font.get_init():
         pygame.font.init()
-    sizes = (34, 17, 13, 19, 25)
-    paths = _find_korean_font_paths()
-    if paths is not None:
-        regular_path, emphasis_path = paths
-        try:
-            return Fonts(
-                number=pygame.font.Font(emphasis_path, sizes[0]),
-                body=pygame.font.Font(regular_path, sizes[1]),
-                candidate=pygame.font.Font(regular_path, sizes[2]),
-                heading=pygame.font.Font(emphasis_path, sizes[3]),
-                title=pygame.font.Font(emphasis_path, sizes[4]),
-            )
-        except (OSError, pygame.error):
-            pass
-
-    number, body, candidate, heading, title = (
-        pygame.font.Font(None, size) for size in sizes
+    return Fonts(
+        number=_load_bundled_font(_SEMIBOLD_FONT_PATH, 34),
+        body=_load_bundled_font(_REGULAR_FONT_PATH, 17),
+        candidate=_load_bundled_font(_REGULAR_FONT_PATH, 13),
+        button=_load_bundled_font(_SEMIBOLD_FONT_PATH, 17),
+        heading=_load_bundled_font(_SEMIBOLD_FONT_PATH, 19),
+        title=_load_bundled_font(_SEMIBOLD_FONT_PATH, 25),
     )
-    title.set_bold(True)
-    heading.set_bold(True)
-    return Fonts(number, body, candidate, heading, title)
 
 
 def configure_display(size: tuple[int, int], caption: str) -> pygame.Surface:

@@ -8,7 +8,7 @@ from .solver import solve
 from .visualizer import MeowVisualizer
 
 
-def main() -> None:
+async def main() -> None:
     """Run one input/solve/visualize loop until either screen closes."""
 
     pygame.init()
@@ -18,7 +18,7 @@ def main() -> None:
     try:
         while True:
             dialog = MeowInputDialog(initial_grid=draft)
-            puzzle = dialog.run()
+            puzzle = await dialog.run()
             if puzzle is None:
                 return
 
@@ -26,7 +26,7 @@ def main() -> None:
             result = solve(puzzle)
 
             visualizer = MeowVisualizer(puzzle, result)
-            draft_for_editing = visualizer.run()
+            draft_for_editing = await visualizer.run()
             if draft_for_editing is None:
                 return
             draft = draft_for_editing

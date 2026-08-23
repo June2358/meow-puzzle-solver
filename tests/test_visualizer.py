@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
@@ -100,11 +101,19 @@ def test_escape_returns_the_region_grid(
 ) -> None:
     puzzle = load_preset("쉬움")
     visualizer = MeowVisualizer(puzzle, solve(puzzle))
+
+    async def advance_frame(clock: pygame.time.Clock) -> float:
+        await asyncio.sleep(0)
+        return 1 / 60
+
+    monkeypatch.setattr(
+        "meow.visualizer.next_frame",
+        advance_frame,
+    )
     monkeypatch.setattr(
         pygame.event,
-        "wait",
-        lambda *_args: pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE),
+        "get",
+        lambda: [pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE)],
     )
-    monkeypatch.setattr(pygame.event, "get", lambda: [])
 
-    assert visualizer.run() == puzzle.region_grid
+    assert asyncio.run(visualizer.run()) == puzzle.region_grid

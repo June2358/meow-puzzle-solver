@@ -8,6 +8,7 @@ import pygame
 
 from .exact_solver import ExactStatus
 from .model import Cell, Puzzle, RegionGrid
+from .runtime import next_frame
 from .solver import SolveResult
 from .state import CellState
 from .timeline import PlaybackFrame, TimelineKind, build_timeline
@@ -40,8 +41,6 @@ from .ui_style import (
 _NAVIGATION_REPEAT_DELAY = 0.36
 _NAVIGATION_REPEAT_INTERVAL = 0.08
 _AUTOPLAY_INTERVAL = 0.9
-_TIMER_POLL_MS = 16
-
 _TARGET_BOARD_SIZE = 620
 _MAX_CELL_SIZE = 96
 _MIN_CELL_SIZE = 8
@@ -252,25 +251,25 @@ class MeowVisualizer:
             pygame.Rect(inner_x, controls_y, third, 38),
             "이전",
             PRIMARY,
-            self.fonts.body,
+            self.fonts.button,
         )
         self.play_button = Button(
             pygame.Rect(inner_x + third + gap, controls_y, third, 38),
             "재생",
             ACCENT,
-            self.fonts.body,
+            self.fonts.button,
         )
         self.next_button = Button(
             pygame.Rect(inner_x + (third + gap) * 2, controls_y, third, 38),
             "다음",
             PRIMARY,
-            self.fonts.body,
+            self.fonts.button,
         )
         self.edit_button = Button(
             pygame.Rect(inner_x, controls_y + 50, inner_width, 38),
             "문제 입력으로 돌아가기",
             PRIMARY_DARK,
-            self.fonts.body,
+            self.fonts.button,
         )
 
     def _cell_rect(self, cell: Cell) -> pygame.Rect:
@@ -785,24 +784,17 @@ class MeowVisualizer:
                 self._end_navigation_hold(("mouse", event.button))
         return None
 
-    def run(self) -> RegionGrid | None:
+    async def run(self) -> RegionGrid | None:
         """Run until the user requests editing or closes the application."""
 
         clock = pygame.time.Clock()
         self.draw()
         while self.running:
-            timers_active = (
+            elapsed = await next_frame(clock)
+            timers_were_active = (
                 self.autoplay_enabled or self._active_navigation_source is not None
             )
-            first_event = (
-                pygame.event.wait(_TIMER_POLL_MS)
-                if timers_active
-                else pygame.event.wait()
-            )
-            elapsed = clock.tick() / 1000.0
-            events = (
-                () if first_event.type == pygame.NOEVENT else (first_event,)
-            ) + tuple(pygame.event.get())
+            events = pygame.event.get()
 
             action = self._handle_events(events)
             if action == "edit":
@@ -811,7 +803,7 @@ class MeowVisualizer:
                 break
 
             changed = bool(events)
-            if timers_active:
+            if timers_were_active:
                 changed = self._update_navigation_hold(elapsed) or changed
                 changed = self._update_autoplay(elapsed) or changed
             if changed:

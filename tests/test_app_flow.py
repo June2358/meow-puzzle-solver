@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 import meow.app as app_module
@@ -27,7 +29,7 @@ def test_solve_once_then_edit_restores_the_same_region_grid(
         def __init__(self, initial_grid=None) -> None:
             dialog_drafts.append(initial_grid)
 
-        def run(self):
+        async def run(self):
             return next(dialog_results)
 
     class FakeVisualizer:
@@ -35,7 +37,7 @@ def test_solve_once_then_edit_restores_the_same_region_grid(
             assert received_puzzle is puzzle
             assert received_result is solved
 
-        def run(self):
+        async def run(self):
             return puzzle.region_grid
 
     monkeypatch.setattr(app_module, "MeowInputDialog", FakeDialog)
@@ -46,8 +48,29 @@ def test_solve_once_then_edit_restores_the_same_region_grid(
         lambda received: solve_calls.append(received) or solved,
     )
 
-    app_module.main()
+    asyncio.run(app_module.main())
 
     assert dialog_drafts == [None, puzzle.region_grid]
     assert solve_calls == [puzzle]
+    assert lifecycle == ["init", "quit"]
+
+
+def test_pygame_quits_when_async_screen_flow_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lifecycle: list[str] = []
+    _disable_pygame(monkeypatch, lifecycle)
+
+    class FailingDialog:
+        def __init__(self, initial_grid=None) -> None:
+            pass
+
+        async def run(self):
+            raise RuntimeError("screen failed")
+
+    monkeypatch.setattr(app_module, "MeowInputDialog", FailingDialog)
+
+    with pytest.raises(RuntimeError, match="screen failed"):
+        asyncio.run(app_module.main())
+
     assert lifecycle == ["init", "quit"]

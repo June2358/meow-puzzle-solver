@@ -1,6 +1,6 @@
 """Editable MEOW region input with strict external-vision JSON paste."""
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from typing import Final
 
 import pygame
@@ -15,6 +15,7 @@ from .matrix_input import (
 from .model import MAX_PUZZLE_SIZE, Cell, InvalidRegionMapError, Puzzle
 from .parser import PuzzleParseError, parse_puzzle_json
 from .puzzle_catalog import PRESET_NAMES, load_preset
+from .runtime import next_frame
 from .ui_components import Button
 from .ui_style import (
     ACCENT,
@@ -35,6 +36,13 @@ from .ui_style import (
     get_fonts,
     region_palette,
     wrap_text,
+)
+from .web_text_dialog import (
+    WebTextDialog,
+    WebTextDialogError,
+    is_web_runtime,
+    open_json_dialog,
+    open_prompt_dialog,
 )
 
 DEFAULT_DRAFT_SIZE: Final = 8
@@ -81,6 +89,7 @@ class MeowInputDialog:
         self._replace_size_on_digit = False
         self._dragging = False
         self._drag_label: str | None = None
+        self._web_text_dialog: WebTextDialog | None = None
 
         self.panel_x = _MARGIN + _BOARD_AREA + _PANEL_GAP
         self.panel_inner_x = self.panel_x + _PANEL_PADDING
@@ -113,7 +122,7 @@ class MeowInputDialog:
                     ),
                     name,
                     SURFACE_SUBTLE,
-                    self.fonts.body,
+                    self.fonts.button,
                     text_color=BLACK,
                     hover_color=SURFACE_HOVER,
                     border_color=BORDER,
@@ -136,7 +145,7 @@ class MeowInputDialog:
             ),
             "빈 격자 만들기",
             SURFACE_SUBTLE,
-            self.fonts.body,
+            self.fonts.button,
             text_color=PRIMARY_DARK,
             hover_color=SURFACE_HOVER,
             border_color=BORDER,
@@ -144,6 +153,8 @@ class MeowInputDialog:
 
         tool_y = _GRID_START_Y + 254
         tool_button_width = (self.panel_inner_width - gap) // 2
+        prompt_label = "프롬프트 보기" if is_web_runtime() else "프롬프트 복사"
+        json_label = "JSON 입력" if is_web_runtime() else "JSON 붙여넣기"
         self.copy_prompt_button = Button(
             pygame.Rect(
                 self.panel_inner_x,
@@ -151,9 +162,9 @@ class MeowInputDialog:
                 tool_button_width,
                 _BUTTON_HEIGHT,
             ),
-            "프롬프트 복사",
+            prompt_label,
             SURFACE_SUBTLE,
-            self.fonts.body,
+            self.fonts.button,
             text_color=PRIMARY_DARK,
             hover_color=SURFACE_HOVER,
             border_color=BORDER,
@@ -165,9 +176,9 @@ class MeowInputDialog:
                 tool_button_width,
                 _BUTTON_HEIGHT,
             ),
-            "JSON 붙여넣기",
+            json_label,
             SURFACE_SUBTLE,
-            self.fonts.body,
+            self.fonts.button,
             text_color=PRIMARY_DARK,
             hover_color=SURFACE_HOVER,
             border_color=BORDER,
@@ -181,7 +192,7 @@ class MeowInputDialog:
             ),
             "풀이 시작",
             PRIMARY_DARK,
-            self.fonts.body,
+            self.fonts.button,
         )
 
     def _show_error(self, message: str) -> None:
@@ -418,9 +429,18 @@ class MeowInputDialog:
             (right, y - 10),
         )
         lines = (
-            "A~Z 입력 · Delete/Backspace 삭제",
-            "화살표/Tab 이동 · 채운 칸에서 드래그",
-            "Ctrl+V JSON · Enter 시작 · Esc 종료",
+            (
+                "A~Z 입력 · Delete/Backspace 삭제",
+                "화살표/Tab 이동 · 채운 칸에서 드래그",
+                "JSON 입력 창에 직접 붙여넣기",
+                "Enter 시작 · Esc 종료",
+            )
+            if is_web_runtime()
+            else (
+                "A~Z 입력 · Delete/Backspace 삭제",
+                "화살표/Tab 이동 · 채운 칸에서 드래그",
+                "Ctrl+V JSON · Enter 시작 · Esc 종료",
+            )
         )
         for line in lines:
             self.screen.blit(
@@ -485,10 +505,10 @@ class MeowInputDialog:
             self._apply_size()
             return None
         if self.copy_prompt_button.is_clicked(position):
-            self._copy_ai_prompt()
+            self._handle_prompt_action()
             return None
         if self.paste_button.is_clicked(position):
-            self._paste_puzzle()
+            self._handle_json_action()
             return None
         if self.start_button.is_clicked(position):
             return self._handle_start()
@@ -506,7 +526,7 @@ class MeowInputDialog:
 
     def _handle_keydown(self, event: pygame.event.Event) -> Puzzle | None:
         if event.key == pygame.K_v and event.mod & pygame.KMOD_CTRL:
-            self._paste_puzzle()
+            self._handle_json_action()
             return None
         if event.key == pygame.K_ESCAPE:
             self.running = False
@@ -581,6 +601,12 @@ class MeowInputDialog:
             f"빈 {size}×{size} 격자를 만들었습니다.",
         )
 
+    def _handle_prompt_action(self) -> None:
+        if is_web_runtime():
+            self._open_web_dialog(lambda: open_prompt_dialog(VISION_REGION_PROMPT))
+            return
+        self._copy_ai_prompt()
+
     def _copy_ai_prompt(self) -> None:
         try:
             copy_text(VISION_REGION_PROMPT)
@@ -589,19 +615,75 @@ class MeowInputDialog:
             return
         self._show_notice("이미지 영역 전사용 프롬프트를 복사했습니다.")
 
+    def _handle_json_action(self) -> None:
+        if is_web_runtime():
+            self._open_web_dialog(open_json_dialog)
+            return
+        self._paste_puzzle()
+
     def _paste_puzzle(self) -> None:
         """Parse completely before replacing any visible draft state."""
 
         try:
             text = paste_text()
-            puzzle = parse_puzzle_json(text)
+            self._load_puzzle_text(text)
         except (ClipboardError, PuzzleParseError) as error:
             self._show_error(str(error))
-            return
+
+    def _load_puzzle_text(self, text: str) -> None:
+        """Parse first, then atomically replace the draft with validated JSON."""
+
+        puzzle = parse_puzzle_json(text)
         self._replace_draft(
             RegionDraft(puzzle.region_grid),
             f"{puzzle.size}×{puzzle.size} JSON을 불러왔습니다. 원본 이미지와 확인하세요.",
         )
+
+    def _open_web_dialog(self, factory: Callable[[], WebTextDialog]) -> None:
+        if self._web_text_dialog is not None:
+            return
+        try:
+            self._web_text_dialog = factory()
+        except WebTextDialogError as error:
+            self._show_error(str(error))
+
+    def _poll_web_text_dialog(self) -> bool:
+        dialog = self._web_text_dialog
+        if dialog is None:
+            return False
+        try:
+            result = dialog.poll()
+            if result is None:
+                return False
+            if not result.submitted:
+                self._web_text_dialog = None
+                return True
+            try:
+                self._load_puzzle_text(result.text)
+            except PuzzleParseError as error:
+                dialog.show_error(str(error))
+                return False
+            dialog.close()
+            self._web_text_dialog = None
+            return True
+        except WebTextDialogError as error:
+            try:
+                dialog.close()
+            except WebTextDialogError as close_error:
+                error = WebTextDialogError(f"{error} {close_error}")
+            self._web_text_dialog = None
+            self._show_error(str(error))
+            return True
+
+    def _close_web_text_dialog(self) -> None:
+        dialog = self._web_text_dialog
+        self._web_text_dialog = None
+        if dialog is None:
+            return
+        try:
+            dialog.close()
+        except WebTextDialogError as error:
+            self._show_error(str(error))
 
     def _handle_start(self) -> Puzzle | None:
         empty = self.draft.first_empty()
@@ -636,16 +718,24 @@ class MeowInputDialog:
             (x - self.grid_start_x) // self.cell_size,
         )
 
-    def run(self) -> Puzzle | None:
+    async def run(self) -> Puzzle | None:
         """Wait for input until a valid Puzzle is confirmed or the app closes."""
 
+        clock = pygame.time.Clock()
         self.draw()
-        while self.running:
-            first_event = pygame.event.wait()
-            events = (first_event, *pygame.event.get())
-            result = self._handle_events(events)
-            if result is not None:
-                return result
-            if self.running:
-                self.draw()
-        return None
+        try:
+            while self.running:
+                await next_frame(clock)
+                modal_was_open = self._web_text_dialog is not None
+                dialog_changed = self._poll_web_text_dialog()
+                events = pygame.event.get()
+                if modal_was_open:
+                    events = [event for event in events if event.type == pygame.QUIT]
+                result = self._handle_events(events)
+                if result is not None:
+                    return result
+                if self.running and (events or dialog_changed):
+                    self.draw()
+            return None
+        finally:
+            self._close_web_text_dialog()

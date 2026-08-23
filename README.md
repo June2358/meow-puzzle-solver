@@ -1,18 +1,32 @@
 # MEOW
 
-LinkedIn Queens 형식의 고양이 퍼즐 솔버입니다. 기본 로직의 각 단계와
+고양이 퍼즐 솔버입니다. 기본 로직의 각 단계와
 중첩 없는 귀류법을 화면에 순서대로 보여줍니다. 귀류법으로 결론을
 내지 못하면 백트래킹으로 해 하나만 찾아 최종 보드를 표시합니다.
+Windows에서 pygame으로 실행하거나 웹페이지에서 바로 사용할 수 있습니다.
 
 별도의 Exact verifier가 입력을 `UNIQUE`, `MULTIPLE`, `UNSOLVABLE`로
 분류합니다. 솔버는 verifier가 찾은 해 좌표를 읽지 않습니다.
 
-## 요구 환경과 실행
+## 실행
+
+### 홈페이지
+
+설치 없이 [웹페이지](https://june2358.github.io/meow-puzzle-solver/)에서
+바로 실행할 수 있습니다.
+
+### pygame
 
 - Windows 10/11
-- Python 3.12.2 (현재 Pygbag 브라우저 런타임과 동일)
+- Python 3.12.2
 - pygame-ce 2.5.8
 - [uv](https://docs.astral.sh/uv/)
+
+pygame 화면은
+[Pretendard v1.3.9](https://github.com/orioncactus/pretendard/releases/tag/v1.3.9)의
+Regular와 SemiBold를 번들하며
+[SIL Open Font License 1.1](meow/assets/fonts/OFL-Pretendard.txt)을 따릅니다.
+Desktop과 Web 모두 같은 실제 weight 파일을 사용합니다.
 
 최초 환경 준비:
 
@@ -32,13 +46,6 @@ uv run python -m meow
 uv run ruff check .
 uv run ruff format --check .
 uv run python -m pytest -q -W error
-```
-
-추후 Web 포팅에서 사용할 Pygbag 빌드 도구는 Desktop 런타임과 분리된
-`web` 의존성 그룹에 있습니다.
-
-```powershell
-uv sync --group web
 ```
 
 ### 기본 프리셋
@@ -75,9 +82,15 @@ JSON 붙여넣기는 다음 하나의 형식을 사용합니다.
 - 직접 입력과 JSON 붙여넣기는 1×1부터 26×26까지 지원합니다.
 - 입력 화면에서 크기를 고른 뒤 `A`~`Z`로 영역을 칠할 수 있습니다.
 
-이미지 입력은 내장 OCR이 아닙니다. 화면의 `프롬프트 복사`로
-안내문을 복사한 뒤 이미지와 함께 비전 AI에 전달하고, 반환된 raw JSON을
-붙여넣는 구조입니다. 붙여넣기가 실패하면 기존 입력은 보존됩니다.
+이미지 입력은 내장 OCR이 아닙니다. Desktop에서는 `프롬프트 복사`와
+`JSON 붙여넣기`가 운영체제 클립보드를 사용하며 `Ctrl+V`도 지원합니다.
+Web에서는 `프롬프트 보기`가 선택 가능한 read-only textarea를 열고,
+`JSON 입력`이 실제 HTML textarea를 엽니다. 모바일에서는 이 입력칸을 길게
+눌러 브라우저의 기본 붙여넣기를 사용합니다. Web 앱은 클립보드 읽기 권한을
+요청하지 않습니다.
+
+프롬프트를 이미지와 함께 비전 AI에 전달한 뒤 반환된 raw JSON을 불러옵니다.
+붙여넣기가 실패하면 입력창의 텍스트와 기존 격자를 모두 보존합니다.
 
 ## 풀이 순서
 
@@ -142,13 +155,19 @@ Exact 해 분류
 
 ## 구조와 검증
 
+- `main.py`: Pygbag이 요구하는 얇은 공통 앱 진입점
+- `.github/workflows/pages.yml`: 웹페이지 빌드·게시 자동화
+- `scripts/build_web.py`: 최소 런타임 staging과 Pygbag build
 - `meow/logic_solver.py`: 기본 로직 고정점
 - `meow/solver.py`: 귀류법과 백트래킹
 - `meow/exact_solver.py`: 독립 해 분류
 - `meow/timeline.py`: 화면에 보여줄 선형 풀이 기록
 - `meow/app.py`: 문제 입력과 풀이 재생을 잇는 앱 수명주기
 - `meow/input_dialog.py`: 프리셋·직접 입력·JSON/OCR 입력
+- `meow/web_text_dialog.py`: Web 전용 일회성 DOM textarea
+- `meow/runtime.py`: Desktop/Web 공통 frame pacing
 - `meow/visualizer.py`: pygame-ce 보드와 재생 UI
 - `meow/ui_style.py`, `meow/ui_components.py`: 두 화면이 공유하는 UI 기반
+- `meow/assets/fonts/`: 번들 한글 폰트와 OFL
 - `meow/puzzles.json`: 패키지에 포함된 여섯 기본 프리셋
 - `tests/`: 풀이·입력·화면의 핵심 회귀 검증

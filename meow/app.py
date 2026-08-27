@@ -1,4 +1,4 @@
-"""Top-level pygame flow for editing, solving, and replaying MEOW puzzles."""
+"""Top-level pygame flow for editing and solving MEOW Queens puzzles."""
 
 import pygame
 

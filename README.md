@@ -1,9 +1,27 @@
-# MEOW
+# MEOW — Queens Puzzle Solver
 
-고양이 퍼즐 솔버입니다. 기본 로직의 각 단계와
-중첩 없는 귀류법을 화면에 순서대로 보여줍니다. 귀류법으로 결론을
-내지 못하면 백트래킹으로 해 하나만 찾아 최종 보드를 표시합니다.
-Windows에서 pygame으로 실행하거나 웹페이지에서 바로 사용할 수 있습니다.
+MEOW는 1★ Star Battle 규칙을 고양이 테마로 표현한
+Queens 스타일 논리 퍼즐 솔버입니다. Queens의 왕관 대신 고양이를 배치하지만
+퍼즐 규칙은 동일합니다.
+
+## 퍼즐 규칙
+
+- 각 행에는 고양이가 정확히 한 마리 있어야 합니다.
+- 각 열에는 고양이가 정확히 한 마리 있어야 합니다.
+- 각 색상 영역에는 고양이가 정확히 한 마리 있어야 합니다.
+- 고양이끼리는 대각선을 포함하여 서로 인접할 수 없습니다.
+
+전통적인 N-Queens와 달리 같은 대각선 전체를 금지하지는 않으며, 바로
+인접한 대각선 칸에만 고양이를 함께 배치할 수 없습니다.
+
+이 규칙은 퍼즐 장르상
+[1★ Star Battle](https://www.gmpuzzles.com/blog/2024/10/bonus-star-battle-aka-queens-by-thomas-snyder-5/)에 해당하며,
+[LinkedIn에서는 Queens](https://www.linkedin.com/help/linkedin/answer/a6269510?lang=ko-KR)라는 이름으로 제공됩니다.
+
+MEOW는 기본 로직의 각 단계와 중첩 없는 귀류법을 화면에 순서대로
+보여줍니다. 귀류법으로 결론을 내지 못하면 백트래킹으로 해 하나를 찾아
+최종 보드에 표시합니다. Windows에서 pygame으로 실행하거나 웹페이지에서
+바로 사용할 수 있습니다.
 
 별도의 Exact verifier가 입력을 `UNIQUE`, `MULTIPLE`, `UNSOLVABLE`로
 분류합니다. 솔버는 verifier가 찾은 해 좌표를 읽지 않습니다.
@@ -59,7 +77,7 @@ uv run python -m pytest -q -W error
 | `마스터` | 10×10 | 귀류법 |
 | `극한` | 8×8 | 귀류법 정체 후 백트래킹 |
 
-## 문제 입력
+## Queens 문제 입력
 
 JSON 붙여넣기는 다음 하나의 형식을 사용합니다.
 
@@ -151,7 +169,7 @@ Exact 해 분류
 - 이전·다음 키나 버튼 길게 누르기: 연속 이동
 - `Space`: 자동 재생·정지
 - `Home` / `End`: 처음·끝
-- `Esc`: 문제 입력 화면
+- `Esc`: Queens 문제 입력 화면
 
 ## 구조와 검증
 
@@ -163,7 +181,7 @@ Exact 해 분류
 - `meow/exact_solver.py`: 독립 해 분류
 - `meow/timeline.py`: 화면에 보여줄 선형 풀이 기록
 - `meow/app.py`: 문제 입력과 풀이 재생을 잇는 앱 수명주기
-- `meow/input_dialog.py`: 프리셋·직접 입력·JSON/OCR 입력
+- `meow/input_dialog.py`: 프리셋·직접 입력·JSON/이미지 전사 입력
 - `meow/web_text_dialog.py`: Web 전용 일회성 DOM textarea
 - `meow/runtime.py`: Desktop/Web 공통 frame pacing
 - `meow/visualizer.py`: pygame-ce 보드와 재생 UI

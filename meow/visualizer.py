@@ -1,4 +1,4 @@
-"""Event-driven pygame playback for a precomputed MEOW solve trace."""
+"""Event-driven pygame playback for a precomputed MEOW Queens solve trace."""
 
 from __future__ import annotations
 
@@ -231,7 +231,7 @@ class MeowVisualizer:
         )
         self.screen = configure_display(
             (width, self.height),
-            "MEOW · 고양이 게임 풀이 과정",
+            "MEOW · Queens 퍼즐 풀이 과정",
         )
         self.fonts = get_fonts()
         self.region_colors = region_palette(puzzle.region_labels)
@@ -426,7 +426,7 @@ class MeowVisualizer:
         inner_width = self.panel_rect.width - 36
         y = self.panel_rect.top + 18
         self.screen.blit(
-            self.fonts.title.render("MEOW 풀이 과정", True, PRIMARY_DARK),
+            self.fonts.title.render("MEOW · Queens 풀이 과정", True, PRIMARY_DARK),
             (x, y),
         )
         y += 38

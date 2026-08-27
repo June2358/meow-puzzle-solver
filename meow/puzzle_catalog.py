@@ -1,4 +1,4 @@
-"""Validated built-in MEOW presets stored as package resources."""
+"""Validated built-in MEOW Queens presets stored as package resources."""
 
 import json
 from collections.abc import Mapping

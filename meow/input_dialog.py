@@ -1,4 +1,4 @@
-"""Editable MEOW region input with strict external-vision JSON paste."""
+"""Editable MEOW Queens region input with strict external-vision JSON paste."""
 
 from collections.abc import Callable, Iterable
 from typing import Final
@@ -64,7 +64,7 @@ _MESSAGE_SPACING = 20
 
 
 class MeowInputDialog:
-    """Collect one valid variable-size region puzzle."""
+    """Collect one valid variable-size Queens region puzzle."""
 
     def __init__(
         self,
@@ -72,7 +72,7 @@ class MeowInputDialog:
     ) -> None:
         self.screen = configure_display(
             (_DIALOG_WIDTH, _DIALOG_HEIGHT),
-            "MEOW · 문제 입력",
+            "MEOW · Queens 문제 입력",
         )
         self.fonts = get_fonts()
         self.draft = (
@@ -257,7 +257,7 @@ class MeowInputDialog:
         pygame.display.flip()
 
     def _draw_title(self) -> None:
-        title = self.fonts.title.render("MEOW · 문제 입력", True, PRIMARY_DARK)
+        title = self.fonts.title.render("MEOW · Queens 문제 입력", True, PRIMARY_DARK)
         self.screen.blit(
             title,
             title.get_rect(center=(_DIALOG_WIDTH // 2, 35)),

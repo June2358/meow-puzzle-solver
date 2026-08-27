@@ -1,7 +1,7 @@
 [project]
 name = "meow-solver"
 version = "0.1.0"
-description = "LinkedIn Queens solver and pygame visualizer"
+description = "Cat-themed 1-star Star Battle (Queens-style) solver and visualizer"
 authors = [{ name = "Lim Junmin", email = "dsgoat99@naver.com" }]
 readme = "README.md"
 requires-python = ">=3.12,<3.13"

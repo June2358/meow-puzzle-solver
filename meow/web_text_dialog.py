@@ -285,7 +285,7 @@ def open_prompt_dialog(text: str) -> WebTextDialog:
     """Show selectable read-only prompt text without Clipboard API access."""
 
     return WebTextDialog(
-        title="OCR 프롬프트",
+        title="이미지 전사 프롬프트",
         description="아래 텍스트를 선택한 뒤 브라우저의 시스템 복사를 사용하세요.",
         text=text,
         editable=False,

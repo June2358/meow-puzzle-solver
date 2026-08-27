@@ -66,7 +66,7 @@ def pygbag_command() -> list[str]:
         "--package",
         "io.github.june2358.meow_puzzle_solver",
         "--title",
-        "MEOW Puzzle Solver",
+        "MEOW — Queens Puzzle Solver",
         "--build",
         str(STAGE_ROOT),
     ]

@@ -2,7 +2,7 @@
 
 import pygame
 
-VISION_REGION_PROMPT = """Transcribe the colored-region Queens puzzle in the attached image.
+VISION_REGION_PROMPT = """Transcribe the colored-region Queens (1-star Star Battle) puzzle in the attached image.
 
 Rules:
 1. Infer N from the visible square board and return exactly N rows of N cells.

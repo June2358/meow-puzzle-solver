@@ -1,4 +1,4 @@
-"""상태를 변경하지 않는 기본 로직 finder 모음.
+"""상태를 변경하지 않는 결정적 추론 finder 모음.
 
 각 finder는 현재 snapshot에서 안정적인 순서로 첫 번째 추론만 반환한다.
 후보를 실제로 지우거나 고양이를 놓는 일은 :mod:`meow.logic_solver`만 한다.
@@ -183,14 +183,14 @@ def find_region_line_lock(state: LogicSnapshot) -> Deduction | None:
     return None
 
 
-_COMMON_CONFLICT_SOURCE_ORDER: Final[tuple[UnitKind, ...]] = (
+_UNIT_SUPPORT_SOURCE_ORDER: Final[tuple[UnitKind, ...]] = (
     UnitKind.REGION,
     UnitKind.ROW,
     UnitKind.COLUMN,
 )
 
 
-def find_common_conflict(state: LogicSnapshot) -> Deduction | None:
+def find_unit_support(state: LogicSnapshot) -> Deduction | None:
     """한 exact-one 단위의 모든 후보와 충돌하는 칸을 제외한다.
 
     단위에는 반드시 고양이가 하나 있어야 하므로, 그 고양이의 어느 후보와도
@@ -200,7 +200,7 @@ def find_common_conflict(state: LogicSnapshot) -> Deduction | None:
 
     puzzle = state.puzzle
     possible_cells = tuple(sorted(state.possible_cells))
-    for kind in _COMMON_CONFLICT_SOURCE_ORDER:
+    for kind in _UNIT_SUPPORT_SOURCE_ORDER:
         for index, unit in enumerate(_units(puzzle, kind)):
             if _has_cat(state, unit):
                 continue
@@ -220,7 +220,7 @@ def find_common_conflict(state: LogicSnapshot) -> Deduction | None:
 
             source_ref = UnitRef(kind, index)
             return Deduction(
-                technique=Technique.COMMON_CONFLICT,
+                technique=Technique.UNIT_SUPPORT,
                 exclusions=exclusions,
                 evidence_cells=candidates,
                 explanation=(
@@ -271,7 +271,7 @@ def find_hall_lock(state: LogicSnapshot) -> Deduction | None:
     k개의 source 단위 후보가 정확히 k개의 target 단위에만 걸쳐 있으면, 그
     target 단위들은 source 고양이들이 전부 차지한다. target의 나머지 후보를
     제외한다. 조합 폭발을 피하기 위해 3개 단위까지 검사하고, 그보다 큰
-    조합이 필요한 상태는 귀류법이나 백트래킹으로 넘긴다.
+    조합이 필요한 상태는 한 단계 가정이나 분기 탐색으로 넘긴다.
     """
 
     puzzle = state.puzzle
@@ -334,14 +334,24 @@ def find_hall_lock(state: LogicSnapshot) -> Deduction | None:
     return None
 
 
-TECHNIQUE_FINDERS: Final[tuple[TechniqueFinder, ...]] = (
+DIRECT_PROPAGATION_FINDERS: Final[tuple[TechniqueFinder, ...]] = (
     find_placed_cat_elimination,
     find_row_single,
     find_column_single,
     find_region_single,
+)
+
+UNIT_SUPPORT_FINDERS: Final[tuple[TechniqueFinder, ...]] = (find_unit_support,)
+
+CONTAINER_MATCHING_FINDERS: Final[tuple[TechniqueFinder, ...]] = (
     find_region_line_lock,
-    find_common_conflict,
     find_hall_lock,
+)
+
+TECHNIQUE_FINDERS: Final[tuple[TechniqueFinder, ...]] = (
+    *DIRECT_PROPAGATION_FINDERS,
+    *UNIT_SUPPORT_FINDERS,
+    *CONTAINER_MATCHING_FINDERS,
 )
 
 

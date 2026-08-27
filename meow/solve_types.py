@@ -1,4 +1,4 @@
-"""기본 로직 솔버가 공유하는 불변 값 객체.
+"""결정적 추론 솔버가 공유하는 불변 값 객체.
 
 기법 finder는 :class:`Deduction`만 만들고 상태를 바꾸지 않는다. 실제 적용과
 단계 기록은 ``logic_solver``가 담당한다. 이 분리 덕분에 각 추론의 근거와
@@ -45,8 +45,27 @@ class UnitRef:
             raise ValueError("단위 인덱스는 0 이상이어야 합니다.")
 
 
+class SolverAlgorithm(StrEnum):
+    """솔버를 구성하는 내부 알고리즘의 안정적인 이름."""
+
+    DIRECT_PROPAGATION = "direct_propagation"
+    UNIT_SUPPORT = "unit_support"
+    CONTAINER_MATCHING = "container_matching"
+    SINGLETON_PROBING = "singleton_probing"
+    BACKTRACK_SEARCH = "backtrack_search"
+
+
+SOLVER_ALGORITHM_LABELS: Final[dict[SolverAlgorithm, str]] = {
+    SolverAlgorithm.DIRECT_PROPAGATION: "기본 확정",
+    SolverAlgorithm.UNIT_SUPPORT: "단위 막힘",
+    SolverAlgorithm.CONTAINER_MATCHING: "묶음 잠금",
+    SolverAlgorithm.SINGLETON_PROBING: "한 단계 가정",
+    SolverAlgorithm.BACKTRACK_SEARCH: "분기 탐색",
+}
+
+
 class Technique(StrEnum):
-    """현재 기본 로직 솔버가 사용하는 추론 기법."""
+    """상위 알고리즘 안에서 설명에 사용하는 세부 추론 기법."""
 
     PLACED_CAT_ELIMINATION = "placed_cat_elimination"
     ROW_SINGLE = "row_single"
@@ -56,9 +75,9 @@ class Technique(StrEnum):
     REGION_TO_COLUMN_LOCK = "region_to_column_lock"
     ROW_TO_REGION_LOCK = "row_to_region_lock"
     COLUMN_TO_REGION_LOCK = "column_to_region_lock"
-    COMMON_CONFLICT = "common_conflict"
+    UNIT_SUPPORT = "unit_support"
     HALL_LOCK = "hall_lock"
-    REFUTATION_ELIMINATION = "refutation_elimination"
+    PROBE_ELIMINATION = "probe_elimination"
 
 
 TECHNIQUE_LABELS: Final[dict[Technique, str]] = {
@@ -70,9 +89,24 @@ TECHNIQUE_LABELS: Final[dict[Technique, str]] = {
     Technique.REGION_TO_COLUMN_LOCK: "영역→열 잠금",
     Technique.ROW_TO_REGION_LOCK: "행→영역 잠금",
     Technique.COLUMN_TO_REGION_LOCK: "열→영역 잠금",
-    Technique.COMMON_CONFLICT: "공통 충돌",
+    Technique.UNIT_SUPPORT: "단위 막힘",
     Technique.HALL_LOCK: "Hall 잠금",
-    Technique.REFUTATION_ELIMINATION: "귀류법으로 후보 제외",
+    Technique.PROBE_ELIMINATION: "한 단계 가정으로 후보 제외",
+}
+
+
+TECHNIQUE_ALGORITHMS: Final[dict[Technique, SolverAlgorithm]] = {
+    Technique.PLACED_CAT_ELIMINATION: SolverAlgorithm.DIRECT_PROPAGATION,
+    Technique.ROW_SINGLE: SolverAlgorithm.DIRECT_PROPAGATION,
+    Technique.COLUMN_SINGLE: SolverAlgorithm.DIRECT_PROPAGATION,
+    Technique.REGION_SINGLE: SolverAlgorithm.DIRECT_PROPAGATION,
+    Technique.UNIT_SUPPORT: SolverAlgorithm.UNIT_SUPPORT,
+    Technique.REGION_TO_ROW_LOCK: SolverAlgorithm.CONTAINER_MATCHING,
+    Technique.REGION_TO_COLUMN_LOCK: SolverAlgorithm.CONTAINER_MATCHING,
+    Technique.ROW_TO_REGION_LOCK: SolverAlgorithm.CONTAINER_MATCHING,
+    Technique.COLUMN_TO_REGION_LOCK: SolverAlgorithm.CONTAINER_MATCHING,
+    Technique.HALL_LOCK: SolverAlgorithm.CONTAINER_MATCHING,
+    Technique.PROBE_ELIMINATION: SolverAlgorithm.SINGLETON_PROBING,
 }
 
 
@@ -103,6 +137,12 @@ class Deduction:
             raise ValueError(
                 f"같은 칸을 배치와 제외에 함께 넣을 수 없습니다: {overlap}"
             )
+
+    @property
+    def algorithm(self) -> SolverAlgorithm:
+        """이 세부 추론을 만든 상위 알고리즘을 반환한다."""
+
+        return TECHNIQUE_ALGORITHMS[self.technique]
 
 
 @dataclass(frozen=True, slots=True)

@@ -8,9 +8,9 @@ def test_six_presets_represent_the_solver_boundaries() -> None:
         "쉬움": (4, SolveOutcome.SOLVED_WITH_LOGIC),
         "보통": (7, SolveOutcome.SOLVED_WITH_LOGIC),
         "어려움": (11, SolveOutcome.SOLVED_WITH_LOGIC),
-        "전문가": (5, SolveOutcome.SOLVED_WITH_REFUTATION),
-        "마스터": (10, SolveOutcome.SOLVED_WITH_REFUTATION),
-        "극한": (8, SolveOutcome.SOLVED_WITH_BACKTRACKING),
+        "전문가": (5, SolveOutcome.SOLVED_WITH_PROBING),
+        "마스터": (10, SolveOutcome.SOLVED_WITH_PROBING),
+        "극한": (8, SolveOutcome.SOLVED_WITH_BACKTRACK_SEARCH),
     }
 
     assert tuple(expected) == PRESET_NAMES

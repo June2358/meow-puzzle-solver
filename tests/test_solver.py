@@ -13,7 +13,7 @@ def _puzzle(*rows: str) -> Puzzle:
     return Puzzle.from_region_grid(tuple(tuple(row) for row in rows))
 
 
-REFUTATION_UNIQUE = load_preset("전문가")
+PROBING_UNIQUE = load_preset("전문가")
 
 MULTIPLE = _puzzle(
     "AAACB",
@@ -23,9 +23,9 @@ MULTIPLE = _puzzle(
     "EECCB",
 )
 
-BACKTRACKING_UNIQUE = load_preset("극한")
+BACKTRACK_SEARCH_UNIQUE = load_preset("극한")
 
-BACKTRACKING_UNSOLVABLE = _puzzle(
+BACKTRACK_SEARCH_UNSOLVABLE = _puzzle(
     "ABCDDDDD",
     "AACDDEDE",
     "AACFEEDE",
@@ -56,25 +56,25 @@ def _is_valid_solution(
     )
 
 
-def test_refutation_solves_after_basic_logic_stalls() -> None:
-    result = solve(REFUTATION_UNIQUE)
+def test_probing_solves_after_deterministic_logic_stalls() -> None:
+    result = solve(PROBING_UNIQUE)
 
     assert result.initial_logic_result.status is LogicStatus.STALLED
     assert result.exact_result.status is ExactStatus.UNIQUE
-    assert result.outcome is SolveOutcome.SOLVED_WITH_REFUTATION
-    assert result.refutation_rounds
-    assert not result.used_backtracking
-    assert _is_valid_solution(REFUTATION_UNIQUE, result.solution)
+    assert result.outcome is SolveOutcome.SOLVED_WITH_PROBING
+    assert result.probing_rounds
+    assert not result.used_backtrack_search
+    assert _is_valid_solution(PROBING_UNIQUE, result.solution)
 
 
-def test_stalled_refutation_switches_to_backtracking() -> None:
-    result = solve(BACKTRACKING_UNIQUE)
+def test_stalled_probing_switches_to_backtrack_search() -> None:
+    result = solve(BACKTRACK_SEARCH_UNIQUE)
 
     assert result.exact_result.status is ExactStatus.UNIQUE
-    assert result.outcome is SolveOutcome.SOLVED_WITH_BACKTRACKING
-    assert result.used_backtracking
-    assert result.refutation_rounds[-1].stalled
-    assert _is_valid_solution(BACKTRACKING_UNIQUE, result.solution)
+    assert result.outcome is SolveOutcome.SOLVED_WITH_BACKTRACK_SEARCH
+    assert result.used_backtrack_search
+    assert result.probing_rounds[-1].stalled
+    assert _is_valid_solution(BACKTRACK_SEARCH_UNIQUE, result.solution)
 
 
 def test_multiple_puzzle_returns_one_valid_solution() -> None:
@@ -86,40 +86,40 @@ def test_multiple_puzzle_returns_one_valid_solution() -> None:
 
 
 def test_unsolvable_puzzle_returns_no_solution() -> None:
-    result = solve(BACKTRACKING_UNSOLVABLE)
+    result = solve(BACKTRACK_SEARCH_UNSOLVABLE)
 
     assert result.exact_result.status is ExactStatus.UNSOLVABLE
     assert result.outcome is SolveOutcome.UNSOLVABLE
-    assert result.used_backtracking
+    assert result.used_backtrack_search
     assert result.solution is None
 
 
-def test_refutation_is_not_nested_and_a_contradiction_becomes_x() -> None:
-    result = solve(REFUTATION_UNIQUE)
+def test_probing_is_not_nested_and_a_contradiction_becomes_x() -> None:
+    result = solve(PROBING_UNIQUE)
 
     assert all(
-        step.deduction.technique is not Technique.REFUTATION_ELIMINATION
-        for round_ in result.refutation_rounds
-        for assumption in round_.assumptions
-        for step in assumption.logic_result.steps
+        step.deduction.technique is not Technique.PROBE_ELIMINATION
+        for round_ in result.probing_rounds
+        for probe in round_.probes
+        for step in probe.logic_result.steps
     )
 
     eliminated_rounds = [
-        round_ for round_ in result.refutation_rounds if round_.elimination is not None
+        round_ for round_ in result.probing_rounds if round_.elimination is not None
     ]
     assert eliminated_rounds
     for round_ in eliminated_rounds:
         contradiction = next(
-            assumption
-            for assumption in round_.assumptions
-            if assumption.status is LogicStatus.CONTRADICTION
+            probe
+            for probe in round_.probes
+            if probe.status is LogicStatus.CONTRADICTION
         )
         elimination = round_.elimination
         assert elimination is not None
-        refutation_step = next(
+        probing_step = next(
             step
             for step in elimination.steps
-            if step.deduction.technique is Technique.REFUTATION_ELIMINATION
+            if step.deduction.technique is Technique.PROBE_ELIMINATION
         )
-        assert refutation_step.deduction.exclusions == (contradiction.assumption,)
-        assert refutation_step.after.is_excluded(contradiction.assumption)
+        assert probing_step.deduction.exclusions == (contradiction.assumption,)
+        assert probing_step.after.is_excluded(contradiction.assumption)

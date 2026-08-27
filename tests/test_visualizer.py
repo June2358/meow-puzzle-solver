@@ -42,9 +42,9 @@ def test_core_frames_render() -> None:
     visualizer = MeowVisualizer(puzzle, solve(puzzle))
     core_kinds = (
         TimelineKind.LOGIC_STEP,
-        TimelineKind.ASSUME,
+        TimelineKind.PROBE_START,
         TimelineKind.RESTORE,
-        TimelineKind.BACKTRACKING,
+        TimelineKind.BACKTRACK_SEARCH,
         TimelineKind.FINAL,
     )
 

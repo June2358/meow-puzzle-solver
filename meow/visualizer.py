@@ -9,6 +9,7 @@ import pygame
 from .exact_solver import ExactStatus
 from .model import Cell, Puzzle, RegionGrid
 from .runtime import next_frame
+from .solve_types import SOLVER_ALGORITHM_LABELS, SolverAlgorithm
 from .solver import SolveResult
 from .state import CellState
 from .timeline import PlaybackFrame, TimelineKind, build_timeline
@@ -606,7 +607,10 @@ class MeowVisualizer:
                 )
             return tuple(groups)
 
-        if frame.kind is TimelineKind.ASSUME and frame.active_assumption is not None:
+        if (
+            frame.kind is TimelineKind.PROBE_START
+            and frame.active_assumption is not None
+        ):
             return (
                 (
                     "임시 가정 · 1",
@@ -620,8 +624,9 @@ class MeowVisualizer:
                     (f"{_cell_name(frame.focus_cells[0])} 원래 상태로 복원",),
                 ),
             )
-        if frame.kind is TimelineKind.BACKTRACKING:
-            return (("전환", ("백트래킹으로 답 하나 탐색",)),)
+        if frame.kind is TimelineKind.BACKTRACK_SEARCH:
+            search_label = SOLVER_ALGORITHM_LABELS[SolverAlgorithm.BACKTRACK_SEARCH]
+            return (("전환", (f"{search_label}으로 답 하나 찾기",)),)
         if frame.kind is TimelineKind.FINAL:
             status = self.result.exact_result.status
             if status is ExactStatus.UNSOLVABLE:

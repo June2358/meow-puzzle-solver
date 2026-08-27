@@ -1,4 +1,4 @@
-"""정답 탐색 없이 기본 로직을 고정점까지 적용하는 솔버."""
+"""정답 탐색 없이 결정적 추론을 고정점까지 적용하는 솔버."""
 
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ class LogicSolver:
                         initial_state=initial_snapshot,
                         final_state=before,
                         steps=tuple(steps),
-                        message="기본 로직만으로 해결했습니다.",
+                        message="결정적 추론만으로 해결했습니다.",
                     )
                 return LogicResult(
                     status=LogicStatus.STALLED,

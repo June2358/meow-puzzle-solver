@@ -1,4 +1,4 @@
-"""기본 로직, 귀류법, 백트래킹을 순서대로 실행하는 풀이 코어.
+"""결정적 추론, 한 단계 가정, 분기 탐색을 순서대로 실행하는 풀이 코어.
 
 Exact verifier는 해의 개수만 독립적으로 판정한다. 실제 풀이는 exact가
 찾은 좌표를 읽지 않고, 마지막에 해의 존재 여부만 교차 검증한다.
@@ -30,14 +30,14 @@ class SolveOutcome(StrEnum):
     """솔버가 답을 얻은 단계."""
 
     SOLVED_WITH_LOGIC = "SOLVED_WITH_LOGIC"
-    SOLVED_WITH_REFUTATION = "SOLVED_WITH_REFUTATION"
-    SOLVED_WITH_BACKTRACKING = "SOLVED_WITH_BACKTRACKING"
+    SOLVED_WITH_PROBING = "SOLVED_WITH_PROBING"
+    SOLVED_WITH_BACKTRACK_SEARCH = "SOLVED_WITH_BACKTRACK_SEARCH"
     UNSOLVABLE = "UNSOLVABLE"
 
 
 @dataclass(frozen=True, slots=True)
-class AssumptionResult:
-    """후보 하나를 가정하고 기본 로직만 실행한 결과."""
+class ProbeResult:
+    """후보 하나를 고양이로 가정하고 결정적 추론만 실행한 결과."""
 
     assumption: Cell
     logic_result: LogicResult
@@ -48,34 +48,34 @@ class AssumptionResult:
 
 
 @dataclass(frozen=True, slots=True)
-class RefutationRound:
-    """중첩 없이 한 단위의 후보를 시험한 귀류법 한 번."""
+class ProbingRound:
+    """중첩 없이 한 단위의 후보를 시험한 한 단계 가정 한 번."""
 
     before: LogicSnapshot
     selected_unit: UnitRef
     candidates: tuple[Cell, ...]
-    assumptions: tuple[AssumptionResult, ...]
+    probes: tuple[ProbeResult, ...]
     elimination: LogicResult | None = None
 
     @property
     def stalled(self) -> bool:
         return (
             self.elimination is None
-            and len(self.assumptions) == len(self.candidates)
-            and all(result.status is LogicStatus.STALLED for result in self.assumptions)
+            and len(self.probes) == len(self.candidates)
+            and all(result.status is LogicStatus.STALLED for result in self.probes)
         )
 
 
 @dataclass(frozen=True, slots=True)
 class SolveResult:
-    """해 분류, 기본 로직, 귀류법 결과와 표시할 해."""
+    """해 분류, 결정적 추론, 한 단계 가정 결과와 표시할 해."""
 
     outcome: SolveOutcome
     exact_result: ExactResult
     initial_logic_result: LogicResult
     solution: Solution | None
-    refutation_rounds: tuple[RefutationRound, ...] = ()
-    used_backtracking: bool = False
+    probing_rounds: tuple[ProbingRound, ...] = ()
+    used_backtrack_search: bool = False
 
 
 _UNIT_KIND_ORDER: Final[tuple[UnitKind, ...]] = (
@@ -121,7 +121,7 @@ def _select_mrv_unit(snapshot: LogicSnapshot) -> tuple[UnitRef, tuple[Cell, ...]
 
     _, _, _, ref, candidates = min(choices, key=lambda choice: choice[:3])
     if not candidates:
-        raise RuntimeError("모순 상태가 기본 로직을 통과했습니다.")
+        raise RuntimeError("모순 상태가 결정적 추론을 통과했습니다.")
     return ref, candidates
 
 
@@ -151,7 +151,7 @@ def _valid_solution(puzzle: Puzzle, solution: Solution) -> bool:
 
 
 class Solver:
-    """해를 분류한 뒤 기본 로직, 귀류법, 백트래킹을 실행한다."""
+    """해를 분류한 뒤 결정적 추론, 한 단계 가정, 분기 탐색을 실행한다."""
 
     def __init__(self, puzzle: Puzzle) -> None:
         if not isinstance(puzzle, Puzzle):
@@ -179,7 +179,7 @@ class Solver:
                 solution=None,
             )
         else:
-            rounds, solution, used_backtracking = self._solve_by_refutation(
+            rounds, solution, used_backtrack_search = self._solve_by_probing(
                 initial_logic.final_state
             )
             result = SolveResult(
@@ -187,51 +187,51 @@ class Solver:
                     SolveOutcome.UNSOLVABLE
                     if solution is None
                     else (
-                        SolveOutcome.SOLVED_WITH_BACKTRACKING
-                        if used_backtracking
-                        else SolveOutcome.SOLVED_WITH_REFUTATION
+                        SolveOutcome.SOLVED_WITH_BACKTRACK_SEARCH
+                        if used_backtrack_search
+                        else SolveOutcome.SOLVED_WITH_PROBING
                     )
                 ),
                 exact_result=exact_result,
                 initial_logic_result=initial_logic,
                 solution=solution,
-                refutation_rounds=rounds,
-                used_backtracking=used_backtracking,
+                probing_rounds=rounds,
+                used_backtrack_search=used_backtrack_search,
             )
 
         self._check_exact_consistency(result)
         return result
 
-    def _assume_and_propagate(
+    def _probe_candidate(
         self,
         snapshot: LogicSnapshot,
         candidate: Cell,
-    ) -> AssumptionResult:
-        """후보 하나를 가정하고 기본 로직만 고정점까지 실행한다."""
+    ) -> ProbeResult:
+        """후보 하나를 고양이로 가정하고 결정적 추론을 고정점까지 실행한다."""
 
         assumed = LogicState.from_snapshot(snapshot)
         assumed.place_cat(candidate)
-        # 이 함수는 solve_logically()만 호출하므로 가정 안에서
-        # 다시 귀류법이나 백트래킹으로 들어갈 수 없다.
+        # 이 함수는 solve_logically()만 호출하므로 가정 안에서 다시
+        # singleton probing이나 backtrack search로 들어갈 수 없다.
         logic_result = solve_logically(self.puzzle, assumed)
-        return AssumptionResult(
+        return ProbeResult(
             assumption=candidate,
             logic_result=logic_result,
         )
 
-    def _apply_contradiction(
+    def _apply_refuted_probe(
         self,
         snapshot: LogicSnapshot,
-        contradiction: AssumptionResult,
+        contradiction: ProbeResult,
     ) -> LogicResult:
-        """모순이 난 가정을 원본 상태의 X로 바꾸고 기본 로직을 다시 실행한다."""
+        """모순이 난 가정을 원본 상태의 X로 바꾸고 결정적 추론을 다시 실행한다."""
 
         state = LogicState.from_snapshot(snapshot)
         candidate = contradiction.assumption
         state.exclude(candidate)
         reason = contradiction.logic_result.message or "가정 결과가 모순입니다."
         deduction = Deduction(
-            technique=Technique.REFUTATION_ELIMINATION,
+            technique=Technique.PROBE_ELIMINATION,
             exclusions=(candidate,),
             evidence_cells=(candidate,),
             explanation=(
@@ -253,34 +253,34 @@ class Solver:
             message=resumed.message,
         )
 
-    def _solve_by_refutation(
+    def _solve_by_probing(
         self,
         snapshot: LogicSnapshot,
-    ) -> tuple[tuple[RefutationRound, ...], Solution | None, bool]:
-        """중첩 없는 귀류법을 반복하고, 결론이 없으면 백트래킹한다."""
+    ) -> tuple[tuple[ProbingRound, ...], Solution | None, bool]:
+        """한 단계 가정을 반복하고, 결론이 없으면 분기 탐색한다."""
 
-        rounds: list[RefutationRound] = []
+        rounds: list[ProbingRound] = []
         current = snapshot
         while True:
             selected_unit, candidates = _select_mrv_unit(current)
-            assumptions: list[AssumptionResult] = []
+            probes: list[ProbeResult] = []
             restart = False
 
             for candidate in candidates:
-                result = self._assume_and_propagate(current, candidate)
-                assumptions.append(result)
+                result = self._probe_candidate(current, candidate)
+                probes.append(result)
 
                 if result.status is LogicStatus.CONTRADICTION:
-                    elimination = self._apply_contradiction(
+                    elimination = self._apply_refuted_probe(
                         current,
                         result,
                     )
                     rounds.append(
-                        RefutationRound(
+                        ProbingRound(
                             before=current,
                             selected_unit=selected_unit,
                             candidates=candidates,
-                            assumptions=tuple(assumptions),
+                            probes=tuple(probes),
                             elimination=elimination,
                         )
                     )
@@ -298,11 +298,11 @@ class Solver:
 
                 if result.status is LogicStatus.SOLVED_LOGICALLY:
                     rounds.append(
-                        RefutationRound(
+                        ProbingRound(
                             before=current,
                             selected_unit=selected_unit,
                             candidates=candidates,
-                            assumptions=tuple(assumptions),
+                            probes=tuple(probes),
                         )
                     )
                     return (
@@ -315,25 +315,25 @@ class Solver:
                 continue
 
             rounds.append(
-                RefutationRound(
+                ProbingRound(
                     before=current,
                     selected_unit=selected_unit,
                     candidates=candidates,
-                    assumptions=tuple(assumptions),
+                    probes=tuple(probes),
                 )
             )
-            return tuple(rounds), self._backtrack(current), True
+            return tuple(rounds), self._backtrack_search(current), True
 
-    def _backtrack(self, snapshot: LogicSnapshot) -> Solution | None:
-        """귀류법 기록을 만들지 않고 첫 해 하나만 찾는다."""
+    def _backtrack_search(self, snapshot: LogicSnapshot) -> Solution | None:
+        """추가 재생 기록을 만들지 않고 분기하여 첫 해 하나만 찾는다."""
 
         _, candidates = _select_mrv_unit(snapshot)
         for candidate in candidates:
-            result = self._assume_and_propagate(snapshot, candidate)
+            result = self._probe_candidate(snapshot, candidate)
             if result.status is LogicStatus.SOLVED_LOGICALLY:
                 return _solution_from(result.logic_result.final_state)
             if result.status is LogicStatus.STALLED:
-                solution = self._backtrack(result.logic_result.final_state)
+                solution = self._backtrack_search(result.logic_result.final_state)
                 if solution is not None:
                     return solution
         return None
@@ -355,7 +355,7 @@ class Solver:
             and result.exact_result.status is not ExactStatus.UNIQUE
         ):
             raise RuntimeError(
-                "기본 로직 완성과 exact 유일해 판정이 일치하지 않습니다."
+                "결정적 추론 완성과 exact 유일해 판정이 일치하지 않습니다."
             )
 
 

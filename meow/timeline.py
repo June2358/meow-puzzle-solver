@@ -73,13 +73,10 @@ def _cells_text(cells: tuple[Cell, ...]) -> str:
     return ", ".join(_cell_name(cell) for cell in cells)
 
 
-def _unit_name(round_: ProbingRound) -> str:
-    ref = round_.selected_unit
-    if ref.kind is UnitKind.ROW:
-        return f"행 {ref.index + 1}"
-    if ref.kind is UnitKind.COLUMN:
-        return f"열 {ref.index + 1}"
-    return "표시된 색상 영역"
+def _ranked_candidates_text(cells: tuple[Cell, ...], limit: int = 6) -> str:
+    shown = _cells_text(cells[:limit])
+    remaining = len(cells) - limit
+    return shown if remaining <= 0 else f"{shown} 외 {remaining}칸"
 
 
 def _step_focus(step: LogicStep) -> tuple[Cell, ...]:
@@ -146,20 +143,28 @@ def _append_probing_round(
     frames: list[PlaybackFrame],
     round_: ProbingRound,
 ) -> None:
-    unit_name = _unit_name(round_)
+    if round_.candidates:
+        selection_title = f"{_PROBING_LABEL} · 후보 선택"
+        selection_message = (
+            "고양이로 가정했을 때 다른 미완성 단위에서 새 고양이가 "
+            "즉시 확정되는 후보만 선택했습니다. 새 고양이 수, 새 2후보 "
+            "단위 수, 좌표 순으로 가정합니다. "
+            f"대상 {len(round_.candidates)}칸: "
+            f"{_ranked_candidates_text(round_.candidates)}"
+        )
+    else:
+        selection_title = f"{_PROBING_LABEL} · 대상 없음"
+        selection_message = (
+            "가정 직후 새 고양이를 확정하는 후보가 없습니다. "
+            "한 단계 가정을 생략하고 분기 탐색으로 넘어갑니다."
+        )
     frames.append(
         PlaybackFrame(
             kind=TimelineKind.PROBING_SELECT,
             snapshot=round_.before,
-            title=f"{_PROBING_LABEL} · {unit_name} 후보 선택",
-            message=(
-                f"후보가 가장 적은 {unit_name}을 선택했습니다. 이 단위의 "
-                "후보만 하나씩 가정하며, 가정 안에서 다른 가정은 하지 "
-                "않습니다. "
-                f"후보: {_cells_text(round_.candidates)}"
-            ),
+            title=selection_title,
+            message=selection_message,
             focus_cells=round_.candidates,
-            region_indices=_region_indices((round_.selected_unit,)),
         )
     )
 
@@ -198,11 +203,12 @@ def _append_probing_round(
             )
         )
         if result.status is not LogicStatus.SOLVED_LOGICALLY:
-            next_action = (
-                f"모순이므로 {cell}을 X로 확정합니다."
-                if result.status is LogicStatus.CONTRADICTION
-                else "결론이 없어 선택한 단위의 다음 후보로 넘어갑니다."
-            )
+            if result.status is LogicStatus.CONTRADICTION:
+                next_action = f"모순이므로 {cell}을 X로 확정합니다."
+            elif index == len(round_.probes) and round_.stalled:
+                next_action = "모든 실행 대상이 정체하여 분기 탐색으로 넘어갑니다."
+            else:
+                next_action = "결론이 없어 다음 우선순위 후보로 넘어갑니다."
             frames.append(
                 PlaybackFrame(
                     kind=TimelineKind.RESTORE,
@@ -305,17 +311,25 @@ def build_timeline(result: SolveResult) -> tuple[PlaybackFrame, ...]:
         _append_probing_round(frames, round_)
 
     if result.used_backtrack_search:
+        last_round = result.probing_rounds[-1]
+        if last_round.candidates:
+            search_message = (
+                "새 고양이를 즉시 확정하는 후보들을 한 번씩 가정해도 "
+                "결론이 없었습니다. 임시 가정이 없는 현재 상태에서 "
+                f"{_SEARCH_LABEL}으로 답 하나를 찾습니다."
+            )
+        else:
+            search_message = (
+                "한 단계 가정의 실행 조건을 만족하는 후보가 없습니다. "
+                f"현재 상태에서 {_SEARCH_LABEL}으로 답 하나를 찾습니다."
+            )
         frames.append(
             PlaybackFrame(
                 kind=TimelineKind.BACKTRACK_SEARCH,
-                snapshot=result.probing_rounds[-1].before,
+                snapshot=last_round.before,
                 title=_SEARCH_LABEL,
-                message=(
-                    "선택한 단위의 모든 후보를 한 번씩 가정해도 정체했습니다. "
-                    "임시 가정이 없는 현재 상태에서 "
-                    f"{_SEARCH_LABEL}으로 답 하나를 찾습니다."
-                ),
-                focus_cells=result.probing_rounds[-1].candidates,
+                message=search_message,
+                focus_cells=last_round.candidates,
             )
         )
 

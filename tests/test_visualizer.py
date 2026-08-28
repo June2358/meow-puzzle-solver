@@ -38,8 +38,8 @@ def pygame_dummy_display():
     pygame.quit()
 
 
-def test_core_frames_render() -> None:
-    puzzle = load_preset("극한")
+def test_core_frames_render(stalled_probe_puzzle: Puzzle) -> None:
+    puzzle = stalled_probe_puzzle
     visualizer = MeowVisualizer(puzzle, solve(puzzle))
     core_kinds = (
         TimelineKind.LOGIC_STEP,
@@ -61,8 +61,7 @@ def test_core_frames_render() -> None:
     visualizer.current_step_index = next(
         index
         for index, frame in enumerate(visualizer.timeline)
-        if frame.kind is TimelineKind.LOGIC_STEP
-        and frame.active_assumption is not None
+        if frame.kind is TimelineKind.LOGIC_STEP and frame.active_assumption is not None
     )
     visualizer.draw()
 
@@ -104,8 +103,7 @@ def test_new_exclusion_preserves_region_color_and_uses_red_x() -> None:
     visualizer.current_step_index = next(
         index
         for index, frame in enumerate(visualizer.timeline)
-        if frame.logic_step is not None
-        and frame.logic_step.deduction.exclusions
+        if frame.logic_step is not None and frame.logic_step.deduction.exclusions
     )
     deduction = visualizer.current_frame.logic_step.deduction
     cell = deduction.exclusions[0]
@@ -114,8 +112,9 @@ def test_new_exclusion_preserves_region_color_and_uses_red_x() -> None:
     visualizer.draw()
 
     background_point = (rect.centerx, rect.top + max(3, rect.height // 10))
-    assert tuple(visualizer.screen.get_at(background_point)[:3]) == (
-        visualizer.region_colors[puzzle.region_label(cell)]
+    assert (
+        tuple(visualizer.screen.get_at(background_point)[:3])
+        == (visualizer.region_colors[puzzle.region_label(cell)])
     )
 
     padding = max(2, rect.width // 5)
@@ -127,9 +126,7 @@ def test_related_region_chip_uses_the_board_region_color() -> None:
     puzzle = load_preset("쉬움")
     visualizer = MeowVisualizer(puzzle, solve(puzzle))
     visualizer.current_step_index = next(
-        index
-        for index, frame in enumerate(visualizer.timeline)
-        if frame.region_indices
+        index for index, frame in enumerate(visualizer.timeline) if frame.region_indices
     )
     region_index = visualizer.current_frame.region_indices[0]
     expected = visualizer.region_colors[puzzle.region_labels[region_index]]

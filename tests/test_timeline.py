@@ -26,8 +26,6 @@ SOLVED_PROBE = _puzzle(
     "EECCB",
 )
 
-BACKTRACK_SEARCH = load_preset("극한")
-
 
 def _assert_initial_logic_is_shown(
     result: SolveResult,
@@ -119,11 +117,7 @@ def test_solved_probe_runs_directly_to_the_final_result() -> None:
 
 def test_logic_step_titles_show_only_the_algorithm() -> None:
     timeline = build_timeline(solve(PROBING))
-    frames = [
-        frame
-        for frame in timeline
-        if frame.logic_step is not None
-    ]
+    frames = [frame for frame in timeline if frame.logic_step is not None]
 
     assert any(frame.active_assumption is None for frame in frames)
     assert any(frame.active_assumption is not None for frame in frames)
@@ -132,21 +126,48 @@ def test_logic_step_titles_show_only_the_algorithm() -> None:
         assert frame.title == SOLVER_ALGORITHM_LABELS[deduction.algorithm]
 
 
-def test_stalled_probes_are_restored_before_backtrack_search() -> None:
-    result = solve(BACKTRACK_SEARCH)
+def test_stalled_probes_are_restored_before_backtrack_search(
+    stalled_probe_puzzle: Puzzle,
+) -> None:
+    result = solve(stalled_probe_puzzle)
     timeline = build_timeline(result)
     round_ = result.probing_rounds[-1]
 
     assert round_.stalled
     _assert_initial_logic_is_shown(result, timeline)
-    for probe in round_.probes:
+    for index, probe in enumerate(round_.probes):
         assumption_end = _assert_probe_is_shown(probe, timeline)
-        assert timeline[assumption_end + 1].kind is TimelineKind.RESTORE
+        restore = timeline[assumption_end + 1]
+        assert restore.kind is TimelineKind.RESTORE
+        if index == len(round_.probes) - 1:
+            assert "분기 탐색" in restore.message
+        else:
+            assert "다음 우선순위 후보" in restore.message
     assert [frame.kind for frame in timeline[-2:]] == [
         TimelineKind.BACKTRACK_SEARCH,
         TimelineKind.FINAL,
     ]
     assert timeline[-1].snapshot.cats == frozenset(result.solution or ())
+
+
+def test_no_eligible_probe_shows_skip_before_backtrack_search() -> None:
+    puzzle = _puzzle(
+        "ABCDE",
+        "ABCDE",
+        "ABCDE",
+        "ABCDE",
+        "ABCDE",
+    )
+    result = solve(puzzle)
+    timeline = build_timeline(result)
+    selection = next(
+        frame for frame in timeline if frame.kind is TimelineKind.PROBING_SELECT
+    )
+
+    assert result.probing_rounds[-1].candidates == ()
+    assert selection.title.endswith("대상 없음")
+    assert "새 고양이를 확정하는 후보가 없습니다" in selection.message
+    assert timeline[-2].kind is TimelineKind.BACKTRACK_SEARCH
 
 
 def test_region_labels_are_replaced_by_color_references() -> None:
@@ -160,9 +181,7 @@ def test_region_labels_are_replaced_by_color_references() -> None:
     )
     timeline = build_timeline(solve(puzzle))
     visible_text = "\n".join(
-        text
-        for frame in timeline
-        for text in (frame.title, frame.message)
+        text for frame in timeline for text in (frame.title, frame.message)
     )
 
     assert "SECRET_REGION_" not in visible_text

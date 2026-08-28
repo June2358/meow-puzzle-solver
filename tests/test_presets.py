@@ -3,14 +3,14 @@ from meow.puzzle_catalog import PRESET_NAMES, load_preset
 from meow.solver import SolveOutcome, solve
 
 
-def test_six_presets_represent_the_solver_boundaries() -> None:
+def test_six_presets_have_stable_solver_paths() -> None:
     expected = {
         "쉬움": (4, SolveOutcome.SOLVED_WITH_LOGIC),
         "보통": (7, SolveOutcome.SOLVED_WITH_LOGIC),
         "어려움": (11, SolveOutcome.SOLVED_WITH_LOGIC),
         "전문가": (5, SolveOutcome.SOLVED_WITH_PROBING),
         "마스터": (10, SolveOutcome.SOLVED_WITH_PROBING),
-        "극한": (8, SolveOutcome.SOLVED_WITH_BACKTRACK_SEARCH),
+        "극한": (8, SolveOutcome.SOLVED_WITH_PROBING),
     }
 
     assert tuple(expected) == PRESET_NAMES

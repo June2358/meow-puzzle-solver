@@ -483,9 +483,7 @@ class MeowVisualizer:
         )
         y += 18
         panel_content_bottom = self.previous_button.rect.top - 42
-        assumption_space = (
-            64 if self.current_frame.active_assumption is not None else 0
-        )
+        assumption_space = 64 if self.current_frame.active_assumption is not None else 0
         details_bottom = panel_content_bottom - assumption_space
 
         self.screen.blit(self.fonts.body.render("사유", True, PRIMARY), (x, y))

@@ -116,13 +116,15 @@ class Deduction:
 
     ``placements``와 ``exclusions``가 상태에 가할 적용 내역(delta)이다.
     ``explanation``은 그 적용을 정당화하는 사유만 담고, 나머지 필드는
-    UI가 사유와 적용 내역을 표시할 때 쓰는 구조화된 근거다.
+    UI가 사유와 적용 내역을 표시할 때 쓰는 구조화된 근거다. 영역 이름은
+    사용자에게 노출하지 않고 ``evidence_units``로 실제 색상을 표시한다.
     """
 
     technique: Technique
     placements: tuple[Cell, ...] = ()
     exclusions: tuple[Cell, ...] = ()
     evidence_cells: tuple[Cell, ...] = ()
+    evidence_units: tuple[UnitRef, ...] = ()
     explanation: str = ""
 
     def __post_init__(self) -> None:
@@ -132,6 +134,8 @@ class Deduction:
             raise ValueError("placements에 같은 칸이 중복되었습니다.")
         if len(set(self.exclusions)) != len(self.exclusions):
             raise ValueError("exclusions에 같은 칸이 중복되었습니다.")
+        if len(set(self.evidence_units)) != len(self.evidence_units):
+            raise ValueError("evidence_units에 같은 단위가 중복되었습니다.")
         overlap = set(self.placements) & set(self.exclusions)
         if overlap:
             raise ValueError(

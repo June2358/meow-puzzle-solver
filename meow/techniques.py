@@ -26,14 +26,22 @@ def _kind_name(kind: UnitKind) -> str:
     return {
         UnitKind.ROW: "행",
         UnitKind.COLUMN: "열",
-        UnitKind.REGION: "영역",
+        UnitKind.REGION: "색상 영역",
     }[kind]
 
 
 def _unit_name(puzzle: Puzzle, ref: UnitRef) -> str:
     if ref.kind is UnitKind.REGION:
-        return f"영역 {puzzle.region_labels[ref.index]}"
+        return "표시된 색상 영역"
     return f"{_kind_name(ref.kind)} {ref.index + 1}"
+
+
+def _unit_group_name(puzzle: Puzzle, refs: tuple[UnitRef, ...]) -> str:
+    if refs and refs[0].kind is UnitKind.REGION:
+        if len(refs) == 1:
+            return "표시된 색상 영역"
+        return f"표시된 {len(refs)}개 색상 영역"
+    return ", ".join(_unit_name(puzzle, ref) for ref in refs)
 
 
 def _units(puzzle: Puzzle, kind: UnitKind) -> tuple[Unit, ...]:
@@ -75,8 +83,8 @@ def find_placed_cat_elimination(state: LogicSnapshot) -> Deduction | None:
             exclusions=targets,
             evidence_cells=(cat,),
             explanation=(
-                f"{_cell_name(cat)}에 놓인 고양이와 같은 행·열·영역에 "
-                "있거나 인접한 후보는 함께 고양이가 될 수 없습니다."
+                f"{_cell_name(cat)}에 고양이가 있으므로, 같은 행·열·색상 "
+                "영역 또는 인접한 칸에는 고양이를 놓을 수 없습니다."
             ),
         )
     return None
@@ -102,9 +110,11 @@ def _find_single(state: LogicSnapshot, kind: UnitKind) -> Deduction | None:
             technique=technique,
             placements=(cell,),
             evidence_cells=(cell,),
+            evidence_units=(ref,),
             explanation=(
-                f"{_unit_name(puzzle, ref)}에서 가능한 칸은 "
-                f"{_cell_name(cell)} 하나뿐입니다."
+                f"{_unit_name(puzzle, ref)}에서 고양이를 놓을 수 있는 칸은 "
+                f"{_cell_name(cell)} 하나뿐입니다. 따라서 "
+                f"{_cell_name(cell)}에 고양이를 놓습니다."
             ),
         )
     return None
@@ -174,10 +184,13 @@ def find_region_line_lock(state: LogicSnapshot) -> Deduction | None:
                 technique=technique,
                 exclusions=exclusions,
                 evidence_cells=candidates,
+                evidence_units=(source_ref, target_ref),
                 explanation=(
-                    f"{_unit_name(puzzle, source_ref)}의 모든 후보가 "
-                    f"{_unit_name(puzzle, target_ref)}에 있으므로 두 단위의 "
-                    "고양이는 같은 칸이어야 합니다."
+                    f"{_unit_name(puzzle, source_ref)}의 남은 후보가 모두 "
+                    f"{_unit_name(puzzle, target_ref)}에 있습니다. 따라서 "
+                    f"{_unit_name(puzzle, target_ref)}의 고양이는 "
+                    f"{_unit_name(puzzle, source_ref)}에 있어야 하므로, "
+                    "다른 후보를 제외합니다."
                 ),
             )
     return None
@@ -219,14 +232,26 @@ def find_unit_support(state: LogicSnapshot) -> Deduction | None:
                 continue
 
             source_ref = UnitRef(kind, index)
+            source_name = _unit_name(puzzle, source_ref)
+            if len(exclusions) == 1:
+                target_name = _cell_name(exclusions[0])
+                explanation = (
+                    f"{target_name}에 고양이를 놓으면 {source_name}의 남은 "
+                    f"후보가 모두 막힙니다. {source_name}에는 반드시 고양이 "
+                    f"하나가 필요하므로 {target_name}는 X입니다."
+                )
+            else:
+                explanation = (
+                    f"표시된 각 대상 칸에 고양이를 놓으면 {source_name}의 "
+                    f"남은 후보가 모두 막힙니다. {source_name}에는 반드시 "
+                    "고양이 하나가 필요하므로 이 칸들을 X로 표시합니다."
+                )
             return Deduction(
                 technique=Technique.UNIT_SUPPORT,
                 exclusions=exclusions,
                 evidence_cells=candidates,
-                explanation=(
-                    f"{_unit_name(puzzle, source_ref)}에는 고양이가 정확히 하나 "
-                    "필요하고, 표시된 대상 칸은 그 모든 후보와 충돌합니다."
-                ),
+                evidence_units=(source_ref,),
+                explanation=explanation,
             )
     return None
 
@@ -324,11 +349,13 @@ def find_hall_lock(state: LogicSnapshot) -> Deduction | None:
                     technique=Technique.HALL_LOCK,
                     exclusions=exclusions,
                     evidence_cells=evidence,
+                    evidence_units=(*source_refs, *target_refs),
                     explanation=(
-                        f"{', '.join(_unit_name(puzzle, ref) for ref in source_refs)}의 "
-                        f"후보가 "
-                        f"{', '.join(_unit_name(puzzle, ref) for ref in target_refs)}만 "
-                        "차지하므로 대상 단위들은 이 고양이들로 예약됩니다."
+                        f"{_unit_group_name(puzzle, source_refs)}의 남은 후보가 "
+                        f"{_unit_group_name(puzzle, target_refs)}에만 있습니다. "
+                        f"이 단위들에는 고양이 {subset_size}마리가 필요하므로 "
+                        f"{_unit_group_name(puzzle, target_refs)}은 이 고양이들이 "
+                        "차지합니다. 따라서 다른 후보를 제외합니다."
                     ),
                 )
     return None

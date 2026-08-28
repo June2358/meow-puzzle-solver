@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from meow.model import Puzzle
 from meow.puzzle_catalog import load_preset
-from meow.solve_types import LogicStatus, Technique
+from meow.solve_types import LogicStatus, Technique, UnitKind
 from meow.solver import ProbeResult, SolveResult, solve
 from meow.timeline import PlaybackFrame, TimelineKind, build_timeline
 
@@ -127,3 +127,36 @@ def test_stalled_probes_are_restored_before_backtrack_search() -> None:
         TimelineKind.FINAL,
     ]
     assert timeline[-1].snapshot.cats == frozenset(result.solution or ())
+
+
+def test_region_labels_are_replaced_by_color_references() -> None:
+    source = load_preset("쉬움")
+    renamed = {
+        label: f"SECRET_REGION_{index}"
+        for index, label in enumerate(source.region_labels)
+    }
+    puzzle = Puzzle.from_region_grid(
+        tuple(tuple(renamed[label] for label in row) for row in source.region_grid)
+    )
+    timeline = build_timeline(solve(puzzle))
+    visible_text = "\n".join(
+        text
+        for frame in timeline
+        for text in (frame.title, frame.message)
+    )
+
+    assert "SECRET_REGION_" not in visible_text
+    region_frames = [frame for frame in timeline if frame.region_indices]
+    assert region_frames
+    for frame in region_frames:
+        assert len(frame.region_indices) == len(set(frame.region_indices))
+        if frame.logic_step is None:
+            continue
+        expected = tuple(
+            dict.fromkeys(
+                ref.index
+                for ref in frame.logic_step.deduction.evidence_units
+                if ref.kind is UnitKind.REGION
+            )
+        )
+        assert frame.region_indices == expected

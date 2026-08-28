@@ -15,6 +15,8 @@ from .solve_types import (
     LogicStep,
     SolverAlgorithm,
     Technique,
+    UnitKind,
+    UnitRef,
 )
 from .solver import ProbeResult, ProbingRound, SolveOutcome, SolveResult
 from .state import CellState, LogicSnapshot
@@ -44,6 +46,7 @@ class PlaybackFrame:
     message: str
     active_assumption: Cell | None = None
     focus_cells: tuple[Cell, ...] = ()
+    region_indices: tuple[int, ...] = ()
     logic_step: LogicStep | None = None
 
 
@@ -73,11 +76,11 @@ def _cells_text(cells: tuple[Cell, ...]) -> str:
 
 def _unit_name(round_: ProbingRound) -> str:
     ref = round_.selected_unit
-    if ref.kind.value == "row":
+    if ref.kind is UnitKind.ROW:
         return f"행 {ref.index + 1}"
-    if ref.kind.value == "column":
+    if ref.kind is UnitKind.COLUMN:
         return f"열 {ref.index + 1}"
-    return f"영역 {round_.before.puzzle.region_labels[ref.index]}"
+    return "표시된 색상 영역"
 
 
 def _step_focus(step: LogicStep) -> tuple[Cell, ...]:
@@ -90,6 +93,20 @@ def _step_focus(step: LogicStep) -> tuple[Cell, ...]:
                 *deduction.exclusions,
             )
         )
+    )
+
+
+def _region_indices(refs: tuple[UnitRef, ...]) -> tuple[int, ...]:
+    return tuple(
+        dict.fromkeys(ref.index for ref in refs if ref.kind is UnitKind.REGION)
+    )
+
+
+def _empty_region_indices(snapshot: LogicSnapshot) -> tuple[int, ...]:
+    return tuple(
+        index
+        for index, region in enumerate(snapshot.puzzle.regions)
+        if not snapshot.cats_in(region) and not snapshot.candidates_for(region)
     )
 
 
@@ -121,6 +138,7 @@ def _append_logic_steps(
                 message=step.deduction.explanation or f"{label}을 적용했습니다.",
                 active_assumption=active_assumption,
                 focus_cells=_step_focus(step),
+                region_indices=_region_indices(step.deduction.evidence_units),
                 logic_step=step,
             )
         )
@@ -153,6 +171,7 @@ def _append_probing_round(
                 f"후보: {_cells_text(round_.candidates)}"
             ),
             focus_cells=round_.candidates,
+            region_indices=_region_indices((round_.selected_unit,)),
         )
     )
 
@@ -184,6 +203,11 @@ def _append_probing_round(
                 message=_probe_message(result),
                 active_assumption=result.assumption,
                 focus_cells=(result.assumption,),
+                region_indices=(
+                    _empty_region_indices(result.logic_result.final_state)
+                    if result.status is LogicStatus.CONTRADICTION
+                    else ()
+                ),
             )
         )
         if result.status is not LogicStatus.SOLVED_LOGICALLY:
@@ -283,6 +307,11 @@ def build_timeline(result: SolveResult) -> tuple[PlaybackFrame, ...]:
             snapshot=initial.final_state,
             title=_LOGIC_END_TITLES[initial.status],
             message=initial.message,
+            region_indices=(
+                _empty_region_indices(initial.final_state)
+                if initial.status is LogicStatus.CONTRADICTION
+                else ()
+            ),
         )
     )
 

@@ -24,11 +24,13 @@ def _contradiction_message(snapshot: LogicSnapshot) -> str | None:
     named_groups = (
         ("행", puzzle.rows),
         ("열", puzzle.cols),
-        ("영역", puzzle.regions),
+        ("색상 영역", puzzle.regions),
     )
     for name, units in named_groups:
         for index, unit in enumerate(units):
             if not snapshot.cats_in(unit) and not snapshot.candidates_for(unit):
+                if name == "색상 영역":
+                    return "표시된 색상 영역에 고양이를 놓을 칸이 없습니다."
                 return f"{name} {index + 1}에 가능한 칸이 없습니다."
     return None
 

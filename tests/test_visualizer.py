@@ -15,6 +15,7 @@ from meow.model import Puzzle
 from meow.puzzle_catalog import load_preset
 from meow.solver import solve
 from meow.timeline import TimelineKind
+from meow.ui_style import RED
 from meow.visualizer import MeowVisualizer
 
 MULTIPLE_GRID = (
@@ -73,6 +74,56 @@ def test_all_exact_results_render_a_final_badge() -> None:
 
         assert visualizer.result.exact_result.status is status
         assert badge in visualizer._status_badge()[0]
+
+
+def test_new_exclusion_preserves_region_color_and_uses_red_x() -> None:
+    puzzle = load_preset("쉬움")
+    visualizer = MeowVisualizer(puzzle, solve(puzzle))
+    visualizer.current_step_index = next(
+        index
+        for index, frame in enumerate(visualizer.timeline)
+        if frame.logic_step is not None
+        and frame.logic_step.deduction.exclusions
+    )
+    deduction = visualizer.current_frame.logic_step.deduction
+    cell = deduction.exclusions[0]
+    rect = visualizer._cell_rect(cell)
+
+    visualizer.draw()
+
+    background_point = (rect.centerx, rect.top + max(3, rect.height // 10))
+    assert tuple(visualizer.screen.get_at(background_point)[:3]) == (
+        visualizer.region_colors[puzzle.region_label(cell)]
+    )
+
+    padding = max(2, rect.width // 5)
+    x_start = (rect.left + padding, rect.top + padding)
+    assert tuple(visualizer.screen.get_at(x_start)[:3]) == RED
+
+
+def test_related_region_chip_uses_the_board_region_color() -> None:
+    puzzle = load_preset("쉬움")
+    visualizer = MeowVisualizer(puzzle, solve(puzzle))
+    visualizer.current_step_index = next(
+        index
+        for index, frame in enumerate(visualizer.timeline)
+        if frame.region_indices
+    )
+    region_index = visualizer.current_frame.region_indices[0]
+    expected = visualizer.region_colors[puzzle.region_labels[region_index]]
+    assert visualizer._region_chip_colors()[0] == expected
+
+    x, y = 10, 10
+    visualizer.screen.fill((255, 255, 255))
+    visualizer._draw_region_chips(x, y)
+    chip_y = y + 5
+    label_width = visualizer.fonts.candidate.size("관련 색상 영역")[0]
+    chip_size = max(16, visualizer.fonts.candidate.get_height() - 1)
+    chip_center = (
+        x + label_width + 10 + chip_size // 2,
+        chip_y + chip_size // 2,
+    )
+    assert tuple(visualizer.screen.get_at(chip_center)[:3]) == expected
 
 
 def test_escape_returns_the_region_grid(

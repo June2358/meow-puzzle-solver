@@ -17,7 +17,6 @@ from .ui_components import Button
 from .ui_style import (
     ACCENT,
     ACCENT_LIGHT,
-    ACCENT_YELLOW,
     APP_BACKGROUND,
     BLACK,
     BORDER,
@@ -27,7 +26,6 @@ from .ui_style import (
     ORANGE_LIGHT,
     PRIMARY,
     PRIMARY_DARK,
-    PRIMARY_LIGHT,
     RED,
     RED_LIGHT,
     WHITE,
@@ -282,14 +280,6 @@ class MeowVisualizer:
             self.cell_size,
         )
 
-    def _fill_cell(self, cell: Cell, color: tuple[int, int, int, int]) -> None:
-        rect = self._cell_rect(cell).inflate(-2, -2)
-        if rect.width <= 0 or rect.height <= 0:
-            return
-        overlay = pygame.Surface(rect.size, pygame.SRCALPHA)
-        overlay.fill(color)
-        self.screen.blit(overlay, rect.topleft)
-
     def _outline_cell(self, cell: Cell, color: Color, width: int = 3) -> None:
         rect = self._cell_rect(cell).inflate(-4, -4)
         if rect.width <= 0 or rect.height <= 0:
@@ -316,7 +306,6 @@ class MeowVisualizer:
             border_radius=5,
         )
         self._draw_region_backgrounds()
-        self._draw_frame_highlights()
         draw_region_grid_lines(
             self.screen,
             self.puzzle.region_grid,
@@ -339,24 +328,6 @@ class MeowVisualizer:
                 self.region_colors[label],
                 self._cell_rect(cell),
             )
-
-    def _draw_frame_highlights(self) -> None:
-        frame = self.current_frame
-        if frame.kind is not TimelineKind.FINAL:
-            for cell in frame.focus_cells:
-                self._fill_cell(cell, (*PRIMARY_LIGHT, 90))
-
-        if frame.logic_step is not None:
-            deduction = frame.logic_step.deduction
-            for cell in deduction.evidence_cells:
-                self._fill_cell(cell, (*ACCENT_YELLOW, 92))
-            for cell in deduction.placements:
-                self._fill_cell(cell, (*ACCENT, 80))
-            for cell in deduction.exclusions:
-                self._fill_cell(cell, (*RED, 72))
-
-        if frame.active_assumption is not None:
-            self._fill_cell(frame.active_assumption, (*ORANGE, 82))
 
     def _draw_coordinates(self) -> None:
         if self.cell_size < 18:
@@ -406,6 +377,35 @@ class MeowVisualizer:
         if status is ExactStatus.UNSOLVABLE:
             return "해 없음 · 유효한 배치 없음", RED, RED_LIGHT
         return "유일해", ACCENT, ACCENT_LIGHT
+
+    def _region_chip_colors(self) -> tuple[Color, ...]:
+        return tuple(
+            self.region_colors[self.puzzle.region_labels[index]]
+            for index in self.current_frame.region_indices
+        )
+
+    def _draw_region_chips(self, x: int, y: int) -> int:
+        colors = self._region_chip_colors()
+        if not colors:
+            return y
+
+        y += 5
+        label = self.fonts.candidate.render("관련 색상 영역", True, GRAY)
+        self.screen.blit(label, (x, y + 1))
+        chip_x = x + label.get_width() + 10
+        chip_size = max(16, self.fonts.candidate.get_height() - 1)
+        for color in colors:
+            rect = pygame.Rect(chip_x, y, chip_size, chip_size)
+            pygame.draw.rect(self.screen, color, rect, border_radius=4)
+            pygame.draw.rect(
+                self.screen,
+                BLACK,
+                rect,
+                width=2,
+                border_radius=4,
+            )
+            chip_x += chip_size + 6
+        return y + max(label.get_height(), chip_size) + 8
 
     def _draw_panel(self) -> None:
         pygame.draw.rect(
@@ -467,6 +467,8 @@ class MeowVisualizer:
                 max_width=inner_width,
                 max_y=y + 44,
             )
+
+        y = self._draw_region_chips(x, y)
 
         pygame.draw.line(
             self.screen,

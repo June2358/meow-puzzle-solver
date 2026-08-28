@@ -212,7 +212,7 @@ def find_unit_support(state: LogicSnapshot) -> Deduction | None:
     """
 
     puzzle = state.puzzle
-    possible_cells = tuple(sorted(state.possible_cells))
+    possible_cells = frozenset(state.possible_cells)
     for kind in _UNIT_SUPPORT_SOURCE_ORDER:
         for index, unit in enumerate(_units(puzzle, kind)):
             if _has_cat(state, unit):
@@ -221,13 +221,13 @@ def find_unit_support(state: LogicSnapshot) -> Deduction | None:
             if not candidates:
                 continue
 
-            exclusions = tuple(
-                target
-                for target in possible_cells
-                if all(
-                    target in puzzle.conflicts[candidate] for candidate in candidates
-                )
-            )
+            common_conflicts = set(puzzle.conflicts[candidates[0]])
+            common_conflicts.intersection_update(possible_cells)
+            for candidate in candidates[1:]:
+                common_conflicts.intersection_update(puzzle.conflicts[candidate])
+                if not common_conflicts:
+                    break
+            exclusions = tuple(sorted(common_conflicts))
             if not exclusions:
                 continue
 
@@ -377,8 +377,8 @@ CONTAINER_MATCHING_FINDERS: Final[tuple[TechniqueFinder, ...]] = (
 
 TECHNIQUE_FINDERS: Final[tuple[TechniqueFinder, ...]] = (
     *DIRECT_PROPAGATION_FINDERS,
-    *UNIT_SUPPORT_FINDERS,
     *CONTAINER_MATCHING_FINDERS,
+    *UNIT_SUPPORT_FINDERS,
 )
 
 

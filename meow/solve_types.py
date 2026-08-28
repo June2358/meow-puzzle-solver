@@ -57,8 +57,8 @@ class SolverAlgorithm(StrEnum):
 
 SOLVER_ALGORITHM_LABELS: Final[dict[SolverAlgorithm, str]] = {
     SolverAlgorithm.DIRECT_PROPAGATION: "Basic Deductions",
-    SolverAlgorithm.UNIT_SUPPORT: "Crowding",
     SolverAlgorithm.CONTAINER_MATCHING: "Container Locks",
+    SolverAlgorithm.UNIT_SUPPORT: "Crowding",
     SolverAlgorithm.SINGLETON_PROBING: "One-Step Lookahead",
     SolverAlgorithm.BACKTRACK_SEARCH: "Backtracking",
 }

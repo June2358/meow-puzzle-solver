@@ -15,6 +15,13 @@ from meow.techniques import (
 
 def test_every_algorithm_and_technique_has_display_metadata() -> None:
     assert set(SOLVER_ALGORITHM_LABELS) == set(SolverAlgorithm)
+    assert SOLVER_ALGORITHM_LABELS == {
+        SolverAlgorithm.DIRECT_PROPAGATION: "Basic Deductions",
+        SolverAlgorithm.UNIT_SUPPORT: "Crowding",
+        SolverAlgorithm.CONTAINER_MATCHING: "Container Locks",
+        SolverAlgorithm.SINGLETON_PROBING: "One-Step Lookahead",
+        SolverAlgorithm.BACKTRACK_SEARCH: "Backtracking",
+    }
     assert set(TECHNIQUE_LABELS) == set(Technique)
     assert set(TECHNIQUE_ALGORITHMS) == set(Technique)
 

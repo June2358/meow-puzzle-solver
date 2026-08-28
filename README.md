@@ -128,9 +128,9 @@ Exact 해 분류
 
 | 내부 명칭 | 사용자용 명칭 | 현재 포함 기법 |
 | --- | --- | --- |
-| `DIRECT_PROPAGATION` | 기본 확정 | 배치된 고양이의 충돌 제거, 행·열·색상 영역 Single |
-| `UNIT_SUPPORT` | 단위 막힘 | 한 단위의 모든 후보와 충돌하는 칸 제외 |
-| `CONTAINER_MATCHING` | 묶음 잠금 | 색상 영역↔행·열 잠금, Hall 잠금 |
+| `DIRECT_PROPAGATION` | Basic Deductions | 배치된 고양이의 충돌 제거, 행·열·색상 영역 Single |
+| `UNIT_SUPPORT` | Crowding | 한 단위의 모든 후보와 충돌하는 칸 제외 |
+| `CONTAINER_MATCHING` | Container Locks | 색상 영역↔행·열 잠금, Hall 잠금 |
 
 아래 알고리즘 순서로 더 이상 변화가 없을 때까지 반복합니다. 한 deduction을
 적용하면 다시 기본 확정부터 검사합니다.

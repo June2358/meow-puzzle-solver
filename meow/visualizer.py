@@ -335,16 +335,17 @@ class MeowVisualizer:
         font = self.fonts.candidate
         start_x, start_y = self.board_origin
         for index in range(self.puzzle.size):
-            label = font.render(str(index + 1), True, GRAY)
+            column_label = font.render(f"C{index + 1}", True, GRAY)
+            row_label = font.render(f"R{index + 1}", True, GRAY)
             column_center = start_x + index * self.cell_size + self.cell_size // 2
             row_center = start_y + index * self.cell_size + self.cell_size // 2
             self.screen.blit(
-                label,
-                label.get_rect(center=(column_center, start_y - 13)),
+                column_label,
+                column_label.get_rect(center=(column_center, start_y - 13)),
             )
             self.screen.blit(
-                label,
-                label.get_rect(center=(start_x - 17, row_center)),
+                row_label,
+                row_label.get_rect(center=(start_x - 17, row_center)),
             )
 
     def _draw_cell_states(self) -> None:
@@ -457,16 +458,19 @@ class MeowVisualizer:
             max_y=y + 50,
         )
 
-        if self.current_frame.active_assumption is not None:
-            assumption = _cell_name(self.current_frame.active_assumption)
-            y = self._draw_wrapped(
-                f"활성 가정 · {assumption} = 고양이",
-                x,
-                y + 3,
-                color=ORANGE,
-                max_width=inner_width,
-                max_y=y + 44,
+        if (
+            self.current_frame.kind is TimelineKind.LOGIC_STEP
+            and self.current_frame.active_assumption is not None
+        ):
+            self.screen.blit(
+                self.fonts.body.render(
+                    SOLVER_ALGORITHM_LABELS[SolverAlgorithm.SINGLETON_PROBING],
+                    True,
+                    ORANGE,
+                ),
+                (x, y + 3),
             )
+            y += 25
 
         y = self._draw_region_chips(x, y)
 
@@ -478,7 +482,11 @@ class MeowVisualizer:
             width=1,
         )
         y += 18
-        details_bottom = self.previous_button.rect.top - 42
+        panel_content_bottom = self.previous_button.rect.top - 42
+        assumption_space = (
+            64 if self.current_frame.active_assumption is not None else 0
+        )
+        details_bottom = panel_content_bottom - assumption_space
 
         self.screen.blit(self.fonts.body.render("사유", True, PRIMARY), (x, y))
         y += 23
@@ -500,13 +508,14 @@ class MeowVisualizer:
             )
             y += 23
             for label, items in effect_groups:
-                if y + 21 > details_bottom:
-                    break
-                self.screen.blit(
-                    self.fonts.candidate.render(label, True, BLACK),
-                    (x, y),
-                )
-                y += 19
+                if self.current_frame.logic_step is None:
+                    if y + 21 > details_bottom:
+                        break
+                    self.screen.blit(
+                        self.fonts.candidate.render(label, True, BLACK),
+                        (x, y),
+                    )
+                    y += 19
                 y = self._draw_effect_items(
                     items,
                     x,
@@ -515,6 +524,19 @@ class MeowVisualizer:
                     max_y=details_bottom,
                 )
                 y += 5
+
+        if self.current_frame.active_assumption is not None:
+            assumption = _cell_name(self.current_frame.active_assumption)
+            y += 8
+            self.screen.blit(
+                self.fonts.body.render("활성 가정", True, ORANGE),
+                (x, y),
+            )
+            y += 22
+            self.screen.blit(
+                self.fonts.body.render(f"{assumption} = 고양이", True, GRAY),
+                (x, y),
+            )
 
         mouse_pos = pygame.mouse.get_pos()
         self.play_button.text = "일시정지" if self.autoplay_enabled else "재생"
@@ -609,16 +631,6 @@ class MeowVisualizer:
                 )
             return tuple(groups)
 
-        if (
-            frame.kind is TimelineKind.PROBE_START
-            and frame.active_assumption is not None
-        ):
-            return (
-                (
-                    "임시 가정 · 1",
-                    (f"{_cell_name(frame.active_assumption)} = 고양이",),
-                ),
-            )
         if frame.kind is TimelineKind.RESTORE and frame.focus_cells:
             return (
                 (

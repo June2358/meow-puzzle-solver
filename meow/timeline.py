@@ -14,7 +14,6 @@ from .solve_types import (
     LogicStatus,
     LogicStep,
     SolverAlgorithm,
-    Technique,
     UnitKind,
     UnitRef,
 )
@@ -114,22 +113,11 @@ def _append_logic_steps(
     frames: list[PlaybackFrame],
     result: LogicResult,
     *,
-    context: str,
     active_assumption: Cell | None = None,
 ) -> None:
     for step in result.steps:
         label = TECHNIQUE_LABELS[step.deduction.technique]
-        algorithm_label = SOLVER_ALGORITHM_LABELS[step.deduction.algorithm]
-        if step.deduction.technique is Technique.PROBE_ELIMINATION:
-            title = (
-                f"{_PROBING_LABEL} 확정 · "
-                f"{_cell_name(step.deduction.exclusions[0])} = X"
-            )
-        else:
-            detail = (
-                label if label == algorithm_label else f"{algorithm_label} · {label}"
-            )
-            title = f"{context} {step.number}단계 · {detail}"
+        title = SOLVER_ALGORITHM_LABELS[step.deduction.algorithm]
         frames.append(
             PlaybackFrame(
                 kind=TimelineKind.LOGIC_STEP,
@@ -181,7 +169,7 @@ def _append_probing_round(
             PlaybackFrame(
                 kind=TimelineKind.PROBE_START,
                 snapshot=result.logic_result.initial_state,
-                title=f"{_PROBING_LABEL} {index}/{len(round_.candidates)} · {cell}",
+                title=f"{_PROBING_LABEL} · 후보 {index}/{len(round_.candidates)}",
                 message=(
                     f"{cell}에 고양이를 가정하고 결정적 추론을 끝까지 적용합니다."
                 ),
@@ -192,14 +180,13 @@ def _append_probing_round(
         _append_logic_steps(
             frames,
             result.logic_result,
-            context=f"{cell} 가정",
             active_assumption=result.assumption,
         )
         frames.append(
             PlaybackFrame(
                 kind=TimelineKind.PROBE_END,
                 snapshot=result.logic_result.final_state,
-                title=f"{_PROBE_END_TITLES[result.status]} · {cell}",
+                title=_PROBE_END_TITLES[result.status],
                 message=_probe_message(result),
                 active_assumption=result.assumption,
                 focus_cells=(result.assumption,),
@@ -230,7 +217,6 @@ def _append_probing_round(
         _append_logic_steps(
             frames,
             round_.elimination,
-            context="X 반영 후 결정적 추론",
         )
 
 
@@ -300,7 +286,7 @@ def build_timeline(result: SolveResult) -> tuple[PlaybackFrame, ...]:
             message="빈 보드에서 결정적 추론을 시작합니다.",
         )
     ]
-    _append_logic_steps(frames, initial, context="논리 풀이")
+    _append_logic_steps(frames, initial)
     frames.append(
         PlaybackFrame(
             kind=TimelineKind.LOGIC_END,
@@ -323,7 +309,7 @@ def build_timeline(result: SolveResult) -> tuple[PlaybackFrame, ...]:
             PlaybackFrame(
                 kind=TimelineKind.BACKTRACK_SEARCH,
                 snapshot=result.probing_rounds[-1].before,
-                title=f"{_PROBING_LABEL} 종료 · {_SEARCH_LABEL} 시작",
+                title=_SEARCH_LABEL,
                 message=(
                     "선택한 단위의 모든 후보를 한 번씩 가정해도 정체했습니다. "
                     "임시 가정이 없는 현재 상태에서 "

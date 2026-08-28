@@ -44,6 +44,7 @@ def test_core_frames_render() -> None:
     core_kinds = (
         TimelineKind.LOGIC_STEP,
         TimelineKind.PROBE_START,
+        TimelineKind.PROBE_END,
         TimelineKind.RESTORE,
         TimelineKind.BACKTRACK_SEARCH,
         TimelineKind.FINAL,
@@ -56,6 +57,27 @@ def test_core_frames_render() -> None:
             if frame.kind is kind
         )
         visualizer.draw()
+
+    visualizer.current_step_index = next(
+        index
+        for index, frame in enumerate(visualizer.timeline)
+        if frame.kind is TimelineKind.LOGIC_STEP
+        and frame.active_assumption is not None
+    )
+    visualizer.draw()
+
+
+def test_probe_start_shows_the_assumption_only_in_the_active_assumption_block() -> None:
+    puzzle = load_preset("극한")
+    visualizer = MeowVisualizer(puzzle, solve(puzzle))
+    visualizer.current_step_index = next(
+        index
+        for index, frame in enumerate(visualizer.timeline)
+        if frame.kind is TimelineKind.PROBE_START
+    )
+
+    assert visualizer.current_frame.active_assumption is not None
+    assert visualizer._effect_groups() == ()
 
 
 def test_all_exact_results_render_a_final_badge() -> None:

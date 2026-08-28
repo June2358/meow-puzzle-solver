@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from meow.model import Puzzle
 from meow.puzzle_catalog import load_preset
-from meow.solve_types import LogicStatus, Technique, UnitKind
+from meow.solve_types import (
+    SOLVER_ALGORITHM_LABELS,
+    LogicStatus,
+    Technique,
+    UnitKind,
+)
 from meow.solver import ProbeResult, SolveResult, solve
 from meow.timeline import PlaybackFrame, TimelineKind, build_timeline
 
@@ -110,6 +115,21 @@ def test_solved_probe_runs_directly_to_the_final_result() -> None:
     solved_end = probe_ends[round_.probes.index(solved)]
     assert timeline[solved_end + 1].kind is TimelineKind.FINAL
     assert TimelineKind.BACKTRACK_SEARCH not in {frame.kind for frame in timeline}
+
+
+def test_logic_step_titles_show_only_the_algorithm() -> None:
+    timeline = build_timeline(solve(PROBING))
+    frames = [
+        frame
+        for frame in timeline
+        if frame.logic_step is not None
+    ]
+
+    assert any(frame.active_assumption is None for frame in frames)
+    assert any(frame.active_assumption is not None for frame in frames)
+    for frame in frames:
+        deduction = frame.logic_step.deduction
+        assert frame.title == SOLVER_ALGORITHM_LABELS[deduction.algorithm]
 
 
 def test_stalled_probes_are_restored_before_backtrack_search() -> None:

@@ -16,6 +16,23 @@ class InvalidRegionMapError(ValueError):
     """Raised when a value is not a valid square Queens region map."""
 
 
+def _normalize_region_label(label: object, row: int, column: int) -> str:
+    if not isinstance(label, str) or not label.strip():
+        raise InvalidRegionMapError(
+            f"R{row + 1}C{column + 1}의 영역 이름은 비어 있지 않은 문자열이어야 합니다."
+        )
+    if label != label.strip():
+        raise InvalidRegionMapError(
+            f"R{row + 1}C{column + 1}의 영역 이름에는 앞뒤 공백을 사용할 수 없습니다."
+        )
+    if chr(0) in label or any(0xD800 <= ord(char) <= 0xDFFF for char in label):
+        raise InvalidRegionMapError(
+            f"R{row + 1}C{column + 1}의 영역 이름에는 화면에 표시할 수 없는 문자를 "
+            "사용할 수 없습니다."
+        )
+    return label
+
+
 def _normalize_region_grid(value: object) -> RegionGrid:
     if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
         raise InvalidRegionMapError("영역 맵은 행으로 이루어진 시퀀스여야 합니다.")
@@ -41,17 +58,7 @@ def _normalize_region_grid(value: object) -> RegionGrid:
 
         normalized_row: list[str] = []
         for col_index, label in enumerate(row):
-            if not isinstance(label, str) or not label.strip():
-                raise InvalidRegionMapError(
-                    f"R{row_index + 1}C{col_index + 1}의 영역 이름은 "
-                    "비어 있지 않은 문자열이어야 합니다."
-                )
-            if label != label.strip():
-                raise InvalidRegionMapError(
-                    f"R{row_index + 1}C{col_index + 1}의 영역 이름에는 "
-                    "앞뒤 공백을 사용할 수 없습니다."
-                )
-            normalized_row.append(label)
+            normalized_row.append(_normalize_region_label(label, row_index, col_index))
         rows.append(tuple(normalized_row))
 
     return tuple(rows)

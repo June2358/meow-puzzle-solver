@@ -53,19 +53,12 @@ class Button:
         color = self._get_color()
         border_color = self.border_color or self._darken(color)
 
-        # 그림자
-        shadow_rect = pygame.Rect(
-            self.rect.x + _BUTTON_SHADOW_OFFSET,
-            self.rect.y + _BUTTON_SHADOW_OFFSET,
-            self.rect.width,
-            self.rect.height,
-        )
+        shadow_rect = self.rect.move(_BUTTON_SHADOW_OFFSET, _BUTTON_SHADOW_OFFSET)
         screen.blit(self._shadow_surface, shadow_rect.topleft)
 
         self._draw_rect(screen, color, self.rect)
         self._draw_rect(screen, border_color, self.rect, width=1)
 
-        # 텍스트
         text_surface = self.font.render(self.text, True, self.text_color)
         text_rect = text_surface.get_rect(center=self.rect.center)
         screen.blit(text_surface, text_rect)

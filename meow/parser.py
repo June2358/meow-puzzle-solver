@@ -27,12 +27,15 @@ def parse_puzzle_json(text: str) -> Puzzle:
         raise PuzzleParseError(
             f"올바른 JSON이 아닙니다: {error.lineno}행 {error.colno}열"
         ) from error
+    except (RecursionError, ValueError) as error:
+        raise PuzzleParseError(
+            "JSON이 너무 복잡하거나 지원하지 않는 값이 있습니다."
+        ) from error
 
     if not isinstance(document, dict):
         raise PuzzleParseError("JSON 최상위 값은 객체여야 합니다.")
 
-    allowed_fields = {"regions"}
-    unknown_fields = set(document) - allowed_fields
+    unknown_fields = document.keys() - {"regions"}
     if unknown_fields:
         fields = ", ".join(sorted(repr(field) for field in unknown_fields))
         raise PuzzleParseError(f"지원하지 않는 JSON 필드입니다: {fields}")

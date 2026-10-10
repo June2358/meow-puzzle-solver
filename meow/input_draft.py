@@ -4,9 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import cast
 
-from .model import MAX_PUZZLE_SIZE, Cell, Puzzle, RegionGrid
+from .model import (
+    MAX_PUZZLE_SIZE,
+    Cell,
+    InvalidRegionMapError,
+    Puzzle,
+    _normalize_region_label,
+)
 
 type DraftLabel = str | None
 type DraftGrid = tuple[tuple[DraftLabel, ...], ...]
@@ -23,15 +28,10 @@ class IncompleteDraftError(InvalidDraftError):
 def _normalize_label(label: object, row: int, column: int) -> DraftLabel:
     if label is None:
         return None
-    if not isinstance(label, str) or not label.strip():
-        raise InvalidDraftError(
-            f"R{row + 1}C{column + 1}의 영역 이름은 비어 있지 않은 문자열이어야 합니다."
-        )
-    if label != label.strip():
-        raise InvalidDraftError(
-            f"R{row + 1}C{column + 1}의 영역 이름에는 앞뒤 공백을 사용할 수 없습니다."
-        )
-    return label
+    try:
+        return _normalize_region_label(label, row, column)
+    except InvalidRegionMapError as error:
+        raise InvalidDraftError(str(error)) from error
 
 
 def _normalize_grid(value: object) -> DraftGrid:
@@ -144,4 +144,4 @@ class RegionDraft:
             raise IncompleteDraftError(
                 f"R{row + 1}C{column + 1}의 영역 라벨을 입력하세요."
             )
-        return Puzzle.from_region_grid(cast(RegionGrid, self.grid))
+        return Puzzle.from_region_grid(self.grid)

@@ -35,22 +35,10 @@ def _normalize_status_grid(puzzle: Puzzle, value: object) -> StatusGrid:
                 f"상태의 {row_index + 1}행에는 정확히 "
                 f"{puzzle.size}개 셀이 있어야 합니다."
             )
-        normalized_row: list[CellState] = []
-        for status in row:
-            if not isinstance(status, CellState):
-                raise TypeError("모든 셀 상태는 CellState여야 합니다.")
-            normalized_row.append(status)
-        rows.append(tuple(normalized_row))
+        if any(not isinstance(status, CellState) for status in row):
+            raise TypeError("모든 셀 상태는 CellState여야 합니다.")
+        rows.append(tuple(row))
     return tuple(rows)
-
-
-def _status_at(
-    puzzle: Puzzle,
-    grid: StatusGrid | list[list[CellState]],
-    cell: Cell,
-) -> CellState:
-    row, col = puzzle.validate_cell(cell)
-    return grid[row][col]
 
 
 def _cells_with(
@@ -58,9 +46,7 @@ def _cells_with(
     grid: StatusGrid | list[list[CellState]],
     status: CellState,
 ) -> tuple[Cell, ...]:
-    return tuple(
-        cell for cell in puzzle.cells if _status_at(puzzle, grid, cell) == status
-    )
+    return tuple(cell for cell in puzzle.cells if grid[cell[0]][cell[1]] == status)
 
 
 def _filter_unit(
@@ -71,27 +57,12 @@ def _filter_unit(
 ) -> tuple[Cell, ...]:
     if isinstance(unit, (str, bytes)):
         raise TypeError("unit은 셀 좌표의 iterable이어야 합니다.")
-    return tuple(
-        cell
-        for raw_cell in unit
-        if _status_at(puzzle, grid, cell := puzzle.validate_cell(raw_cell)) == status
-    )
-
-
-def _has_contradiction(view: LogicSnapshot) -> bool:
-    cats = view.cats
-    if any(other in view.puzzle.conflicts[cell] for cell in cats for other in cats):
-        return True
-    return any(
-        not view.cats_in(unit) and not view.candidates_for(unit)
-        for unit in view.puzzle.units
-    )
-
-
-def _is_solved(view: LogicSnapshot) -> bool:
-    if view.has_contradiction():
-        return False
-    return all(len(view.cats_in(unit)) == 1 for unit in view.puzzle.units)
+    cells: list[Cell] = []
+    for raw_cell in unit:
+        cell = puzzle.validate_cell(raw_cell)
+        if grid[cell[0]][cell[1]] == status:
+            cells.append(cell)
+    return tuple(cells)
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,7 +90,8 @@ class LogicSnapshot:
         return frozenset(_cells_with(self.puzzle, self.status_grid, CellState.CAT))
 
     def status_at(self, cell: Cell) -> CellState:
-        return _status_at(self.puzzle, self.status_grid, cell)
+        row, col = self.puzzle.validate_cell(cell)
+        return self.status_grid[row][col]
 
     def is_possible(self, cell: Cell) -> bool:
         return self.status_at(cell) is CellState.POSSIBLE
@@ -137,10 +109,18 @@ class LogicSnapshot:
         return _filter_unit(self.puzzle, self.status_grid, unit, CellState.CAT)
 
     def has_contradiction(self) -> bool:
-        return _has_contradiction(self)
+        cats = self.cats
+        return any(self.puzzle.conflicts[cell] & cats for cell in cats) or any(
+            not self.cats_in(unit) and not self.candidates_for(unit)
+            for unit in self.puzzle.units
+        )
 
     def is_solved(self) -> bool:
-        return _is_solved(self)
+        cats = self.cats
+        # N nonconflicting cats fill all N rows, columns, and regions.
+        return len(cats) == self.puzzle.size and not any(
+            self.puzzle.conflicts[cell] & cats for cell in cats
+        )
 
 
 class LogicState:

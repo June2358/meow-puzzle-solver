@@ -155,34 +155,23 @@ class MeowInputDialog:
         tool_button_width = (self.panel_inner_width - gap) // 2
         prompt_label = "프롬프트 보기" if is_web_runtime() else "프롬프트 복사"
         json_label = "JSON 입력" if is_web_runtime() else "JSON 붙여넣기"
-        self.copy_prompt_button = Button(
-            pygame.Rect(
-                self.panel_inner_x,
-                tool_y,
-                tool_button_width,
-                _BUTTON_HEIGHT,
-            ),
-            prompt_label,
-            SURFACE_SUBTLE,
-            self.fonts.button,
-            text_color=PRIMARY_DARK,
-            hover_color=SURFACE_HOVER,
-            border_color=BORDER,
-        )
-        self.paste_button = Button(
-            pygame.Rect(
-                self.panel_inner_x + tool_button_width + gap,
-                tool_y,
-                tool_button_width,
-                _BUTTON_HEIGHT,
-            ),
-            json_label,
-            SURFACE_SUBTLE,
-            self.fonts.button,
-            text_color=PRIMARY_DARK,
-            hover_color=SURFACE_HOVER,
-            border_color=BORDER,
-        )
+        self.copy_prompt_button, self.paste_button = [
+            Button(
+                pygame.Rect(
+                    self.panel_inner_x + index * (tool_button_width + gap),
+                    tool_y,
+                    tool_button_width,
+                    _BUTTON_HEIGHT,
+                ),
+                label,
+                SURFACE_SUBTLE,
+                self.fonts.button,
+                text_color=PRIMARY_DARK,
+                hover_color=SURFACE_HOVER,
+                border_color=BORDER,
+            )
+            for index, label in enumerate((prompt_label, json_label))
+        ]
         self.start_button = Button(
             pygame.Rect(
                 self.panel_inner_x,
@@ -324,10 +313,20 @@ class MeowInputDialog:
     def _fit_label(label: str, font: pygame.font.Font, width: int) -> str:
         if font.size(label)[0] <= width:
             return label
-        content = label
-        while content and font.size(content + "…")[0] > width:
-            content = content[:-1]
-        return content + "…" if content else ""
+        if not label.isascii():
+            # shortcut: Unicode widths can shrink; use shaping-aware metrics if fitting is slow.
+            content = label
+            while content and font.size(content + "…")[0] > width:
+                content = content[:-1]
+            return content + "…" if content else ""
+        low, high = 0, len(label)
+        while low < high:
+            middle = (low + high + 1) // 2
+            if font.size(label[:middle] + "…")[0] <= width:
+                low = middle
+            else:
+                high = middle - 1
+        return label[:low] + "…" if low else ""
 
     def _draw_panel(self) -> None:
         panel_rect = pygame.Rect(

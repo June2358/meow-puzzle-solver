@@ -9,19 +9,16 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from itertools import combinations
-from typing import Final
 
 from .exact_solver import ExactResult, ExactStatus, Solution, verify_exact
 from .logic_solver import solve_logically
-from .model import Cell, Puzzle, Unit
+from .model import Cell, Puzzle
 from .solve_types import (
     Deduction,
     LogicResult,
     LogicStatus,
     LogicStep,
     Technique,
-    UnitKind,
-    UnitRef,
 )
 from .state import LogicSnapshot, LogicState
 
@@ -99,21 +96,6 @@ class SolveResult:
     used_backtrack_search: bool = False
 
 
-_UNIT_KIND_ORDER: Final[tuple[UnitKind, ...]] = (
-    UnitKind.ROW,
-    UnitKind.COLUMN,
-    UnitKind.REGION,
-)
-
-
-def _units(puzzle: Puzzle, kind: UnitKind) -> tuple[Unit, ...]:
-    if kind is UnitKind.ROW:
-        return puzzle.rows
-    if kind is UnitKind.COLUMN:
-        return puzzle.cols
-    return puzzle.regions
-
-
 def _cell_name(cell: Cell) -> str:
     return f"R{cell[0] + 1}C{cell[1] + 1}"
 
@@ -124,26 +106,23 @@ def _solution_from(snapshot: LogicSnapshot) -> Solution:
     return tuple(sorted(snapshot.cats))
 
 
-def _select_mrv_unit(snapshot: LogicSnapshot) -> tuple[UnitRef, tuple[Cell, ...]]:
+def _select_mrv_candidates(snapshot: LogicSnapshot) -> tuple[Cell, ...]:
     """행·열·영역 전체에서 후보가 가장 적은 미완성 단위를 고른다."""
 
-    choices: list[tuple[int, int, int, UnitRef, tuple[Cell, ...]]] = []
-    for kind_order, kind in enumerate(_UNIT_KIND_ORDER):
-        for index, unit in enumerate(_units(snapshot.puzzle, kind)):
-            if snapshot.cats_in(unit):
-                continue
-            candidates = tuple(sorted(snapshot.candidates_for(unit)))
-            choices.append(
-                (len(candidates), kind_order, index, UnitRef(kind, index), candidates)
-            )
-
-    if not choices:
+    candidates = min(
+        (
+            tuple(sorted(snapshot.candidates_for(unit)))
+            for unit in snapshot.puzzle.units
+            if not snapshot.cats_in(unit)
+        ),
+        key=len,
+        default=None,
+    )
+    if candidates is None:
         raise RuntimeError("미완성 상태에 MRV로 선택할 단위가 없습니다.")
-
-    _, _, _, ref, candidates = min(choices, key=lambda choice: choice[:3])
     if not candidates:
         raise RuntimeError("모순 상태가 결정적 추론을 통과했습니다.")
-    return ref, candidates
+    return candidates
 
 
 def _rank_probe_candidates(
@@ -232,42 +211,34 @@ class Solver:
 
         exact_result = verify_exact(self.puzzle)
         initial_logic = solve_logically(self.puzzle)
+        rounds: tuple[ProbingRound, ...] = ()
+        used_backtrack_search = False
 
         if initial_logic.status is LogicStatus.SOLVED_LOGICALLY:
-            result = SolveResult(
-                outcome=SolveOutcome.SOLVED_WITH_LOGIC,
-                exact_result=exact_result,
-                initial_logic_result=initial_logic,
-                solution=_solution_from(initial_logic.final_state),
-            )
+            outcome = SolveOutcome.SOLVED_WITH_LOGIC
+            solution = _solution_from(initial_logic.final_state)
         elif initial_logic.status is LogicStatus.CONTRADICTION:
-            result = SolveResult(
-                outcome=SolveOutcome.UNSOLVABLE,
-                exact_result=exact_result,
-                initial_logic_result=initial_logic,
-                solution=None,
-            )
+            outcome = SolveOutcome.UNSOLVABLE
+            solution = None
         else:
             rounds, solution, used_backtrack_search = self._solve_by_probing(
                 initial_logic.final_state
             )
-            result = SolveResult(
-                outcome=(
-                    SolveOutcome.UNSOLVABLE
-                    if solution is None
-                    else (
-                        SolveOutcome.SOLVED_WITH_BACKTRACK_SEARCH
-                        if used_backtrack_search
-                        else SolveOutcome.SOLVED_WITH_PROBING
-                    )
-                ),
-                exact_result=exact_result,
-                initial_logic_result=initial_logic,
-                solution=solution,
-                probing_rounds=rounds,
-                used_backtrack_search=used_backtrack_search,
-            )
+            if solution is None:
+                outcome = SolveOutcome.UNSOLVABLE
+            elif used_backtrack_search:
+                outcome = SolveOutcome.SOLVED_WITH_BACKTRACK_SEARCH
+            else:
+                outcome = SolveOutcome.SOLVED_WITH_PROBING
 
+        result = SolveResult(
+            outcome=outcome,
+            exact_result=exact_result,
+            initial_logic_result=initial_logic,
+            solution=solution,
+            probing_rounds=rounds,
+            used_backtrack_search=used_backtrack_search,
+        )
         self._check_exact_consistency(result)
         return result
 
@@ -331,80 +302,47 @@ class Solver:
         rounds: list[ProbingRound] = []
         current = snapshot
         while True:
-            candidate_scores = _rank_probe_candidates(current)
-            candidates = tuple(score.cell for score in candidate_scores)
+            candidates = tuple(score.cell for score in _rank_probe_candidates(current))
             probes: list[ProbeResult] = []
-            restart = False
-
-            if not candidates:
-                rounds.append(
-                    ProbingRound(
-                        before=current,
-                        candidates=(),
-                        probes=(),
-                    )
-                )
-                return tuple(rounds), self._backtrack_search(current), True
+            elimination = None
 
             for candidate in candidates:
                 result = self._probe_candidate(current, candidate)
                 probes.append(result)
 
                 if result.status is LogicStatus.CONTRADICTION:
-                    elimination = self._apply_refuted_probe(
-                        current,
-                        result,
-                    )
-                    rounds.append(
-                        ProbingRound(
-                            before=current,
-                            candidates=candidates,
-                            probes=tuple(probes),
-                            elimination=elimination,
-                        )
-                    )
-                    if elimination.status is LogicStatus.SOLVED_LOGICALLY:
-                        return (
-                            tuple(rounds),
-                            _solution_from(elimination.final_state),
-                            False,
-                        )
-                    if elimination.status is LogicStatus.CONTRADICTION:
-                        return tuple(rounds), None, False
-                    current = elimination.final_state
-                    restart = True
+                    elimination = self._apply_refuted_probe(current, result)
                     break
-
                 if result.status is LogicStatus.SOLVED_LOGICALLY:
-                    rounds.append(
-                        ProbingRound(
-                            before=current,
-                            candidates=candidates,
-                            probes=tuple(probes),
-                        )
-                    )
-                    return (
-                        tuple(rounds),
-                        _solution_from(result.logic_result.final_state),
-                        False,
-                    )
-
-            if restart:
-                continue
+                    break
 
             rounds.append(
                 ProbingRound(
                     before=current,
                     candidates=candidates,
                     probes=tuple(probes),
+                    elimination=elimination,
                 )
             )
-            return tuple(rounds), self._backtrack_search(current), True
+            if elimination is not None:
+                if elimination.status is LogicStatus.SOLVED_LOGICALLY:
+                    return tuple(rounds), _solution_from(elimination.final_state), False
+                if elimination.status is LogicStatus.CONTRADICTION:
+                    return tuple(rounds), None, False
+                current = elimination.final_state
+            elif probes and probes[-1].status is LogicStatus.SOLVED_LOGICALLY:
+                return (
+                    tuple(rounds),
+                    _solution_from(probes[-1].logic_result.final_state),
+                    False,
+                )
+            else:
+                return tuple(rounds), self._backtrack_search(current), True
 
     def _backtrack_search(self, snapshot: LogicSnapshot) -> Solution | None:
         """추가 재생 기록을 만들지 않고 분기하여 첫 해 하나만 찾는다."""
 
-        _, candidates = _select_mrv_unit(snapshot)
+        candidates = _select_mrv_candidates(snapshot)
         for candidate in candidates:
             result = self._probe_candidate(snapshot, candidate)
             if result.status is LogicStatus.SOLVED_LOGICALLY:

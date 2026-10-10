@@ -165,8 +165,7 @@ class WebTextDialog:
         controls.style.cssText = (
             "display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;"
         )
-        cancel = self._button("닫기" if not editable else "취소", "cancel")
-        controls.appendChild(cancel)
+        controls.appendChild(self._button("닫기" if not editable else "취소", "cancel"))
         if editable:
             controls.appendChild(self._button("불러오기", "submit", primary=True))
         card.appendChild(controls)
@@ -252,12 +251,10 @@ class WebTextDialog:
             self._focus_canvas()
 
     def _focus_canvas(self) -> None:
-        try:
+        with suppress(Exception):
             canvas = self._document.querySelector("canvas")
             if canvas is not None:
                 canvas.focus()
-        except Exception:
-            pass
 
     def _remove_partial_overlay(self) -> None:
         overlay = self._overlay

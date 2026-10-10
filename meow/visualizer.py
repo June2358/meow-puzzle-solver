@@ -608,25 +608,17 @@ class MeowVisualizer:
         if frame.logic_step is not None:
             deduction = frame.logic_step.deduction
             groups: list[tuple[str, tuple[str, ...]]] = []
-            if deduction.placements:
-                groups.append(
-                    (
-                        f"고양이 확정 · {len(deduction.placements)}",
-                        tuple(
-                            f"{_cell_name(cell)} = 고양이"
-                            for cell in deduction.placements
-                        ),
+            for label, value, cells in (
+                ("고양이 확정", "고양이", deduction.placements),
+                ("X 기입", "X", deduction.exclusions),
+            ):
+                if cells:
+                    groups.append(
+                        (
+                            f"{label} · {len(cells)}",
+                            tuple(f"{_cell_name(cell)} = {value}" for cell in cells),
+                        )
                     )
-                )
-            if deduction.exclusions:
-                groups.append(
-                    (
-                        f"X 기입 · {len(deduction.exclusions)}",
-                        tuple(
-                            f"{_cell_name(cell)} = X" for cell in deduction.exclusions
-                        ),
-                    )
-                )
             return tuple(groups)
 
         if frame.kind is TimelineKind.RESTORE and frame.focus_cells:
@@ -694,10 +686,8 @@ class MeowVisualizer:
         del self._held_navigation_sources[source]
         if self._active_navigation_source != source:
             return
-        self._active_navigation_source = (
-            next(reversed(self._held_navigation_sources), None)
-            if self._held_navigation_sources
-            else None
+        self._active_navigation_source = next(
+            reversed(self._held_navigation_sources), None
         )
         self._navigation_repeat_timer = 0.0
         self._navigation_repeat_started = False

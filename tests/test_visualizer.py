@@ -91,6 +91,11 @@ def test_home_end_and_autoplay_navigation(
     visualizer._update_autoplay(_AUTOPLAY_INTERVAL)
     assert visualizer.current_step_index == 1
 
+    visualizer._set_index(len(visualizer.result.steps) - 2)
+    visualizer._update_autoplay(_AUTOPLAY_INTERVAL)
+    assert visualizer.current_step_index == len(visualizer.result.steps) - 1
+    assert not visualizer.autoplay_enabled
+
 
 def test_run_yields_a_frame_then_handles_a_quit_event(
     solved_case: tuple[Puzzle, SolveResult],

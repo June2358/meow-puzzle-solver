@@ -21,6 +21,10 @@ def parse_matrix_json(text: str) -> Grid:
         raise MatrixParseError(
             f"올바른 JSON 배열이 아닙니다: {exc.msg} (줄 {exc.lineno}, 열 {exc.colno})"
         ) from exc
+    except (ValueError, RecursionError) as exc:
+        raise MatrixParseError(
+            "JSON 숫자가 너무 길거나 배열이 너무 깊게 중첩되어 있습니다."
+        ) from exc
 
     if type(decoded) is not list:
         raise MatrixParseError("최상위 JSON 값은 9개 행을 가진 배열이어야 합니다.")

@@ -72,18 +72,13 @@ class SudokuInputDialog:
         initial_board: object | None = None,
         initial_error: str | None = None,
     ) -> None:
-        self._init_screen()
-        self._init_fonts()
+        self.screen = configure_display(
+            (_DIALOG_WIDTH, _DIALOG_HEIGHT), "스도쿠 문제 입력"
+        )
+        self.fonts = get_fonts()
         self._init_layout()
         self._init_state(initial_board, initial_error)
         self._init_buttons()
-
-    def _init_screen(self) -> None:
-        screen_size = (_DIALOG_WIDTH, _DIALOG_HEIGHT)
-        self.screen = configure_display(screen_size, "스도쿠 문제 입력")
-
-    def _init_fonts(self) -> None:
-        self.fonts = get_fonts()
 
     def _init_layout(self) -> None:
         self.cell_size = _CELL_SIZE
@@ -377,6 +372,8 @@ class SudokuInputDialog:
             if event.type == pygame.QUIT:
                 self.running = False
                 return None
+            if not self.running or self._web_text_dialog is not None:
+                continue
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 result = self._handle_mouse_click(event.pos)
                 if result is not None:
@@ -552,7 +549,7 @@ class SudokuInputDialog:
         elif pygame.K_1 <= event.key <= pygame.K_9:
             self._set_cell(row, col, event.key - pygame.K_0)
         elif pygame.K_KP1 <= event.key <= pygame.K_KP9:
-            self._set_cell(row, col, event.key - pygame.K_KP0)
+            self._set_cell(row, col, event.key - pygame.K_KP1 + 1)
         elif event.key == pygame.K_UP and row > 0:
             self.selected_cell = (row - 1, col)
         elif event.key == pygame.K_DOWN and row < SIZE - 1:

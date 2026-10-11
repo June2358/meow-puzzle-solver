@@ -458,7 +458,7 @@ class SudokuVisualizer:
         self.screen.blit(
             help_surface,
             help_surface.get_rect(
-                center=(panel_rect.centerx, self.previous_button.rect.top - 15)
+                center=(panel_rect.centerx, self.edit_button.rect.bottom + 20)
             ),
         )
 
@@ -495,7 +495,14 @@ class SudokuVisualizer:
         self.screen.blit(self.fonts.button.render(label, True, PRIMARY), (x, y))
         y += 22
         max_width = self.panel_width - _PANEL_X_OFFSET - 32
-        for line in _pack_effect_items(items, self.fonts.body, max_width):
+        content_bottom = self.previous_button.rect.top - 12
+        if self.current_step.depth:
+            content_bottom -= 32 + self.fonts.body.get_height()
+        max_lines = max(1, (content_bottom - y) // 20)
+        lines = _pack_effect_items(items, self.fonts.body, max_width)
+        if len(lines) > max_lines:
+            lines = (*lines[: max_lines - 1], "… 나머지는 보드에서 확인")
+        for line in lines:
             self.screen.blit(self.fonts.body.render(line, True, GRAY), (x, y))
             y += 20
         return y
@@ -662,8 +669,8 @@ class SudokuVisualizer:
         if self.autoplay_timer < _AUTOPLAY_INTERVAL:
             return False
         self.autoplay_timer = 0.0
-        changed = self._navigate(1)
-        if not changed:
+        self._navigate(1)
+        if self.current_step_index == len(self.result.steps) - 1:
             self.autoplay_enabled = False
         return True
 

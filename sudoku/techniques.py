@@ -487,10 +487,13 @@ def _find_hidden_subset(
             for value in sorted(DIGITS)
         }
 
-        for digits_tuple in combinations(sorted(DIGITS), size):
-            if any(not positions_by_digit[value] for value in digits_tuple):
-                continue
-
+        # A digit with more than size positions cannot fit inside this subset.
+        eligible_digits = tuple(
+            value
+            for value in sorted(DIGITS)
+            if 0 < len(positions_by_digit[value]) <= size
+        )
+        for digits_tuple in combinations(eligible_digits, size):
             evidence_cells = tuple(
                 sorted(
                     {
@@ -630,6 +633,8 @@ def find_next_deduction(
 ) -> TechniqueResult | None:
     """Return the first available deduction in stable easiest-first order."""
 
+    if not any(0 in row for row in grid):
+        return None
     for finder in _TECHNIQUE_FINDERS:
         result = finder(grid, candidates)
         if result is not None:

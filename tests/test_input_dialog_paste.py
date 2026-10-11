@@ -38,6 +38,42 @@ def dialog() -> SudokuInputDialog:
     pygame.quit()
 
 
+@pytest.mark.parametrize(
+    ("key", "digit"),
+    [
+        (pygame.K_KP1, 1),
+        (pygame.K_KP2, 2),
+        (pygame.K_KP3, 3),
+        (pygame.K_KP4, 4),
+        (pygame.K_KP5, 5),
+        (pygame.K_KP6, 6),
+        (pygame.K_KP7, 7),
+        (pygame.K_KP8, 8),
+        (pygame.K_KP9, 9),
+    ],
+)
+def test_numeric_keypad_enters_the_selected_digit(
+    dialog: SudokuInputDialog, key: int, digit: int
+) -> None:
+    dialog.selected_cell = (0, 0)
+
+    dialog._handle_keydown(pygame.event.Event(pygame.KEYDOWN, key=key, mod=0))
+
+    assert dialog.board[0][0] == digit
+    assert not dialog.conflicting_cells
+
+
+def test_numeric_keypad_zero_clears_the_selected_cell(
+    dialog: SudokuInputDialog,
+) -> None:
+    dialog.selected_cell = (0, 0)
+    dialog._set_cell(0, 0, 5)
+
+    dialog._handle_keydown(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_KP0, mod=0))
+
+    assert dialog.board[0][0] == 0
+
+
 def test_ctrl_v_then_start_returns_the_pasted_puzzle(
     dialog: SudokuInputDialog, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -57,12 +93,20 @@ def test_ctrl_v_then_start_returns_the_pasted_puzzle(
     assert result.grid == tuple(tuple(row) for row in UNIQUE_GRID)
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "not JSON",
+        pytest.param("[[" + "1" * 4301 + "]]", id="oversized_integer"),
+        pytest.param("[" * 10000 + "0" + "]" * 10000, id="deep_nesting"),
+    ],
+)
 def test_invalid_paste_preserves_the_existing_board(
-    dialog: SudokuInputDialog, monkeypatch: pytest.MonkeyPatch
+    dialog: SudokuInputDialog, monkeypatch: pytest.MonkeyPatch, text: str
 ) -> None:
     dialog._replace_board(UNIQUE_GRID)
     before = validate_grid(dialog.board)
-    monkeypatch.setattr(input_dialog_module, "paste_text", lambda: "not JSON")
+    monkeypatch.setattr(input_dialog_module, "paste_text", lambda: text)
 
     dialog._paste_matrix()
 
@@ -170,6 +214,43 @@ def test_web_dialog_bridge_failure_becomes_pygame_validation_error(
 
     assert dialog._web_text_dialog is None
     assert dialog.validation_error == "DOM bridge failed"
+
+
+def test_opening_web_dialog_blocks_queued_board_input(
+    dialog: SudokuInputDialog,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dialog._replace_board(UNIQUE_GRID)
+    monkeypatch.setattr(input_dialog_module, "is_web_runtime", lambda: True)
+    monkeypatch.setattr(input_dialog_module, "open_json_dialog", FakeWebDialog)
+
+    result = dialog._handle_events(
+        [
+            pygame.event.Event(
+                pygame.MOUSEBUTTONDOWN, button=1, pos=dialog.paste_button.rect.center
+            ),
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_c, mod=pygame.KMOD_CTRL),
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, mod=0),
+        ]
+    )
+
+    assert result is None
+    assert validate_grid(dialog.board) == tuple(tuple(row) for row in UNIQUE_GRID)
+    assert dialog.running
+
+
+def test_escape_blocks_a_queued_start(dialog: SudokuInputDialog) -> None:
+    dialog._replace_board(UNIQUE_GRID)
+
+    result = dialog._handle_events(
+        [
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE, mod=0),
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, mod=0),
+        ]
+    )
+
+    assert result is None
+    assert not dialog.running
 
 
 def test_run_yields_a_frame_then_handles_a_quit_event(

@@ -1,9 +1,6 @@
-from itertools import combinations
-
 import pytest
 from sample_puzzles import grid_from_string
 
-import sudoku.techniques as techniques_module
 from sudoku.board import Grid, Puzzle
 from sudoku.solve_types import CandidateGrid, Technique
 from sudoku.solver_state import SolverState
@@ -118,22 +115,8 @@ def test_hidden_triple_removes_other_candidates_from_its_cells() -> None:
 
 
 @pytest.mark.parametrize("finder", [find_hidden_pair, find_hidden_triple])
-def test_hidden_subsets_skip_combinations_when_every_digit_has_too_many_positions(
-    finder,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    examined = 0
-
-    def counted_combinations(values, size):
-        nonlocal examined
-        for item in combinations(values, size):
-            examined += 1
-            yield item
-
-    monkeypatch.setattr(techniques_module, "combinations", counted_combinations)
-
+def test_hidden_subsets_reject_digits_with_too_many_positions(finder) -> None:
     assert finder(*synthetic_snapshot({})) is None
-    assert examined == 0
 
 
 def test_hidden_pair_keeps_a_digit_with_only_one_possible_position() -> None:

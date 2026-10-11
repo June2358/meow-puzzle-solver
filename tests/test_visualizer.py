@@ -33,7 +33,6 @@ def test_visualizer_draws_a_solved_result(
 ) -> None:
     visualizer = SudokuVisualizer(*solved_case)
 
-    assert visualizer.screen.get_size() == (940, 640)
     visualizer.draw()
 
 

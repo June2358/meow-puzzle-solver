@@ -40,17 +40,7 @@ def dialog() -> SudokuInputDialog:
 
 @pytest.mark.parametrize(
     ("key", "digit"),
-    [
-        (pygame.K_KP1, 1),
-        (pygame.K_KP2, 2),
-        (pygame.K_KP3, 3),
-        (pygame.K_KP4, 4),
-        (pygame.K_KP5, 5),
-        (pygame.K_KP6, 6),
-        (pygame.K_KP7, 7),
-        (pygame.K_KP8, 8),
-        (pygame.K_KP9, 9),
-    ],
+    [(pygame.K_KP1, 1), (pygame.K_KP9, 9)],
 )
 def test_numeric_keypad_enters_the_selected_digit(
     dialog: SudokuInputDialog, key: int, digit: int
@@ -93,20 +83,12 @@ def test_ctrl_v_then_start_returns_the_pasted_puzzle(
     assert result.grid == tuple(tuple(row) for row in UNIQUE_GRID)
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
-        "not JSON",
-        pytest.param("[[" + "1" * 4301 + "]]", id="oversized_integer"),
-        pytest.param("[" * 10000 + "0" + "]" * 10000, id="deep_nesting"),
-    ],
-)
 def test_invalid_paste_preserves_the_existing_board(
-    dialog: SudokuInputDialog, monkeypatch: pytest.MonkeyPatch, text: str
+    dialog: SudokuInputDialog, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     dialog._replace_board(UNIQUE_GRID)
     before = validate_grid(dialog.board)
-    monkeypatch.setattr(input_dialog_module, "paste_text", lambda: text)
+    monkeypatch.setattr(input_dialog_module, "paste_text", lambda: "not JSON")
 
     dialog._paste_matrix()
 

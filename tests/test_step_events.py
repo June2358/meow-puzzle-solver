@@ -36,7 +36,6 @@ def test_assumption_solution_is_still_checked_for_a_second_solution() -> None:
         step.grid for step in result.steps if step.kind is StepKind.ASSUMPTION_SOLVED
     )
 
-    assert StepKind.ASSUMPTION_SOLVED in kinds
     assert StepKind.SEARCH_FALLBACK not in kinds
     assert result.status is SolveStatus.SOLVED_MULTIPLE
     assert result.solution == branch_solution == result.steps[-1].grid

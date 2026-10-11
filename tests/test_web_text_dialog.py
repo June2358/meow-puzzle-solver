@@ -22,8 +22,6 @@ class FakeElement:
         self.value = ""
         self.hidden = False
         self.removed = False
-        self.focus_calls = 0
-        self.select_calls = 0
 
     @property
     def innerHTML(self) -> str:
@@ -50,11 +48,10 @@ class FakeElement:
         self.removed = True
 
     def focus(self) -> None:
-        self.focus_calls += 1
         self.document.activeElement = self
 
     def select(self) -> None:
-        self.select_calls += 1
+        pass
 
     def descendants(self):  # noqa: ANN201
         yield self

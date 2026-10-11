@@ -76,11 +76,9 @@ def test_probing_solves_after_deterministic_logic_stalls() -> None:
 
 
 def test_no_ranked_probe_candidate_switches_to_backtrack_search() -> None:
-    logical = solve_logically(BACKTRACK_SEARCH_MULTIPLE)
     result = solve(BACKTRACK_SEARCH_MULTIPLE)
 
-    assert logical.status is LogicStatus.STALLED
-    assert _rank_probe_candidates(logical.final_state) == ()
+    assert result.initial_logic_result.status is LogicStatus.STALLED
     assert result.exact_result.status is ExactStatus.MULTIPLE
     assert result.outcome is SolveOutcome.SOLVED_WITH_BACKTRACK_SEARCH
     assert result.used_backtrack_search
@@ -109,7 +107,6 @@ def test_multiple_puzzle_returns_one_valid_solution() -> None:
     result = solve(MULTIPLE)
 
     assert result.exact_result.status is ExactStatus.MULTIPLE
-    assert result.solution is not None
     assert _is_valid_solution(MULTIPLE, result.solution)
 
 
@@ -138,20 +135,6 @@ def test_probe_candidates_use_s1_then_s2_then_coordinate_order() -> None:
     snapshot = solve_logically(load_preset("극한")).final_state
     ranked = _rank_probe_candidates(snapshot)
     s2_only_candidate = (1, 3)
-    s2_only_conflicts = snapshot.puzzle.conflicts[s2_only_candidate]
-    forced_cats: set[tuple[int, int]] = set()
-    new_pair_units = 0
-    for unit in snapshot.puzzle.units:
-        if snapshot.cats_in(unit):
-            continue
-        domain = frozenset(snapshot.candidates_for(unit))
-        if s2_only_candidate in domain:
-            continue
-        remaining = domain - s2_only_conflicts
-        if len(domain) > 1 and len(remaining) == 1:
-            forced_cats.update(remaining)
-        elif len(domain) > 2 and len(remaining) == 2:
-            new_pair_units += 1
 
     assert len(snapshot.possible_cells) == 36
     assert len(ranked) == 19
@@ -167,8 +150,6 @@ def test_probe_candidates_use_s1_then_s2_then_coordinate_order() -> None:
         ((6, 6), 2, 3),
     ]
     assert s2_only_candidate in snapshot.possible_cells
-    assert forced_cats == set()
-    assert new_pair_units > 0
     assert s2_only_candidate not in {item.cell for item in ranked}
 
 

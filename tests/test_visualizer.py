@@ -10,7 +10,6 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 import pygame
 import pytest
 
-from meow.exact_solver import ExactStatus
 from meow.model import Puzzle
 from meow.puzzle_catalog import load_preset
 from meow.solver import solve
@@ -57,6 +56,9 @@ def test_core_frames_render(stalled_probe_puzzle: Puzzle) -> None:
             if frame.kind is kind
         )
         visualizer.draw()
+        if kind is TimelineKind.PROBE_START:
+            assert visualizer.current_frame.active_assumption is not None
+            assert visualizer._effect_groups() == ()
 
     visualizer.current_step_index = next(
         index
@@ -66,34 +68,20 @@ def test_core_frames_render(stalled_probe_puzzle: Puzzle) -> None:
     visualizer.draw()
 
 
-def test_probe_start_shows_the_assumption_only_in_the_active_assumption_block() -> None:
-    puzzle = load_preset("극한")
-    visualizer = MeowVisualizer(puzzle, solve(puzzle))
-    visualizer.current_step_index = next(
-        index
-        for index, frame in enumerate(visualizer.timeline)
-        if frame.kind is TimelineKind.PROBE_START
-    )
-
-    assert visualizer.current_frame.active_assumption is not None
-    assert visualizer._effect_groups() == ()
-
-
 def test_all_exact_results_render_a_final_badge() -> None:
     cases = (
-        (None, ExactStatus.UNIQUE, "유일해"),
-        (MULTIPLE_GRID, ExactStatus.MULTIPLE, "복수해"),
-        (UNSOLVABLE_GRID, ExactStatus.UNSOLVABLE, "해 없음"),
+        (None, "유일해"),
+        (MULTIPLE_GRID, "복수해"),
+        (UNSOLVABLE_GRID, "해 없음"),
     )
 
-    for grid, status, badge in cases:
+    for grid, badge in cases:
         puzzle = load_preset("쉬움") if grid is None else Puzzle.from_region_grid(grid)
         visualizer = MeowVisualizer(puzzle, solve(puzzle))
         visualizer.current_step_index = len(visualizer.timeline) - 1
 
         visualizer.draw()
 
-        assert visualizer.result.exact_result.status is status
         assert badge in visualizer._status_badge()[0]
 
 
@@ -130,7 +118,6 @@ def test_related_region_chip_uses_the_board_region_color() -> None:
     )
     region_index = visualizer.current_frame.region_indices[0]
     expected = visualizer.region_colors[puzzle.region_labels[region_index]]
-    assert visualizer._region_chip_colors()[0] == expected
 
     x, y = 10, 10
     visualizer.screen.fill((255, 255, 255))

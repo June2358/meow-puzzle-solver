@@ -62,31 +62,19 @@ class LogicSolver:
             before = state.snapshot()
             contradiction = _contradiction_message(before)
             if contradiction is not None:
-                return LogicResult(
-                    status=LogicStatus.CONTRADICTION,
-                    initial_state=initial_snapshot,
-                    final_state=before,
-                    steps=tuple(steps),
-                    message=contradiction,
-                )
+                status = LogicStatus.CONTRADICTION
+                message = contradiction
+                break
 
             deduction = find_next_deduction(before)
             if deduction is None:
                 if before.is_solved():
-                    return LogicResult(
-                        status=LogicStatus.SOLVED_LOGICALLY,
-                        initial_state=initial_snapshot,
-                        final_state=before,
-                        steps=tuple(steps),
-                        message="결정적 추론만으로 해결했습니다.",
-                    )
-                return LogicResult(
-                    status=LogicStatus.STALLED,
-                    initial_state=initial_snapshot,
-                    final_state=before,
-                    steps=tuple(steps),
-                    message="현재 구현된 논리 기법으로 더 진행할 수 없습니다.",
-                )
+                    status = LogicStatus.SOLVED_LOGICALLY
+                    message = "결정적 추론만으로 해결했습니다."
+                else:
+                    status = LogicStatus.STALLED
+                    message = "현재 구현된 논리 기법으로 더 진행할 수 없습니다."
+                break
 
             changed = False
             for cell in deduction.placements:
@@ -103,6 +91,14 @@ class LogicSolver:
                 after=state.snapshot(),
             )
             steps.append(step)
+
+        return LogicResult(
+            status=status,
+            initial_state=initial_snapshot,
+            final_state=before,
+            steps=tuple(steps),
+            message=message,
+        )
 
 
 def solve_logically(

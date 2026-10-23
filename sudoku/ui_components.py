@@ -61,12 +61,7 @@ class Button:
         border_color = self.border_color or self._darken(color)
 
         # 그림자
-        shadow_rect = pygame.Rect(
-            self.rect.x + _BUTTON_SHADOW_OFFSET,
-            self.rect.y + _BUTTON_SHADOW_OFFSET,
-            self.rect.width,
-            self.rect.height,
-        )
+        shadow_rect = self.rect.move(_BUTTON_SHADOW_OFFSET, _BUTTON_SHADOW_OFFSET)
         screen.blit(self._shadow_surface, shadow_rect.topleft)
 
         self._draw_rect(screen, color, self.rect)

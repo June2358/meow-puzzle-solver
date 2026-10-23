@@ -476,7 +476,7 @@ class MeowInputDialog:
             if event.type == pygame.QUIT:
                 self.running = False
                 return None
-            if self._web_text_dialog is not None:
+            if not self.running or self._web_text_dialog is not None:
                 continue
             if event.type == pygame.WINDOWFOCUSLOST:
                 self._dragging = False

@@ -2,37 +2,10 @@
 
 from __future__ import annotations
 
-from itertools import combinations
-
 from .model import Puzzle
 from .solve_types import LogicResult, LogicStatus, LogicStep
-from .state import LogicSnapshot, LogicState
+from .state import LogicState
 from .techniques import find_next_deduction
-
-
-def _contradiction_message(snapshot: LogicSnapshot) -> str | None:
-    """고양이 충돌이나 비어 버린 exact-one 단위를 보고한다."""
-
-    puzzle = snapshot.puzzle
-    for first, second in combinations(sorted(snapshot.cats), 2):
-        if second in puzzle.conflicts[first]:
-            return (
-                f"R{first[0] + 1}C{first[1] + 1}과 "
-                f"R{second[0] + 1}C{second[1] + 1}의 고양이가 충돌합니다."
-            )
-
-    named_groups = (
-        ("행", puzzle.rows),
-        ("열", puzzle.cols),
-        ("색상 영역", puzzle.regions),
-    )
-    for name, units in named_groups:
-        for index, unit in enumerate(units):
-            if not snapshot.cats_in(unit) and not snapshot.candidates_for(unit):
-                if name == "색상 영역":
-                    return "표시된 색상 영역에 고양이를 놓을 칸이 없습니다."
-                return f"{name} {index + 1}에 가능한 칸이 없습니다."
-    return None
 
 
 class LogicSolver:
@@ -60,33 +33,20 @@ class LogicSolver:
 
         while True:
             before = state.snapshot()
-            contradiction = _contradiction_message(before)
-            if contradiction is not None:
-                return LogicResult(
-                    status=LogicStatus.CONTRADICTION,
-                    initial_state=initial_snapshot,
-                    final_state=before,
-                    steps=tuple(steps),
-                    message=contradiction,
-                )
+            message = before.contradiction_message()
+            if message is not None:
+                status = LogicStatus.CONTRADICTION
+                break
 
             deduction = find_next_deduction(before)
             if deduction is None:
                 if before.is_solved():
-                    return LogicResult(
-                        status=LogicStatus.SOLVED_LOGICALLY,
-                        initial_state=initial_snapshot,
-                        final_state=before,
-                        steps=tuple(steps),
-                        message="결정적 추론만으로 해결했습니다.",
-                    )
-                return LogicResult(
-                    status=LogicStatus.STALLED,
-                    initial_state=initial_snapshot,
-                    final_state=before,
-                    steps=tuple(steps),
-                    message="현재 구현된 논리 기법으로 더 진행할 수 없습니다.",
-                )
+                    status = LogicStatus.SOLVED_LOGICALLY
+                    message = "결정적 추론만으로 해결했습니다."
+                else:
+                    status = LogicStatus.STALLED
+                    message = "현재 구현된 논리 기법으로 더 진행할 수 없습니다."
+                break
 
             changed = False
             for cell in deduction.placements:
@@ -103,6 +63,14 @@ class LogicSolver:
                 after=state.snapshot(),
             )
             steps.append(step)
+
+        return LogicResult(
+            status=status,
+            initial_state=initial_snapshot,
+            final_state=before,
+            steps=tuple(steps),
+            message=message,
+        )
 
 
 def solve_logically(

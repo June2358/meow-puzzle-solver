@@ -108,6 +108,14 @@ def test_multiple_puzzle_returns_one_valid_solution() -> None:
 
     assert result.exact_result.status is ExactStatus.MULTIPLE
     assert _is_valid_solution(MULTIPLE, result.solution)
+    assert result.outcome is SolveOutcome.SOLVED_WITH_PROBING
+    assert not result.used_backtrack_search
+    round_ = result.probing_rounds[-1]
+    assert round_.elimination is None
+    assert round_.probes[-1].status is LogicStatus.SOLVED_LOGICALLY
+    assert result.solution == tuple(
+        sorted(round_.probes[-1].logic_result.final_state.cats)
+    )
 
 
 def test_unsolvable_puzzle_returns_no_solution() -> None:
@@ -116,6 +124,10 @@ def test_unsolvable_puzzle_returns_no_solution() -> None:
     assert result.exact_result.status is ExactStatus.UNSOLVABLE
     assert result.outcome is SolveOutcome.UNSOLVABLE
     assert result.solution is None
+    assert not result.used_backtrack_search
+    elimination = result.probing_rounds[-1].elimination
+    assert elimination is not None
+    assert elimination.status is LogicStatus.CONTRADICTION
 
 
 def test_probe_score_counts_unique_new_cats_and_new_pair_units() -> None:

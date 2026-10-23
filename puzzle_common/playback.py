@@ -81,7 +81,7 @@ class PlaybackScreen[Draft, Frame]:
         self.data = data
         self._edit_draft = edit_draft
         self._board_size = board_size
-        layout = get_board_layout(board_size)
+        self.layout = layout = get_board_layout(board_size)
         self.cell_size = layout.cell_size
         self.board_rect = layout.board_rect
         self.board_origin = self.board_rect.topleft
@@ -150,19 +150,10 @@ class PlaybackScreen[Draft, Frame]:
             return "해 없음 · 유효한 배치 없음", RED, RED_LIGHT
         return "유일해", ACCENT, ACCENT_LIGHT
 
-    def _cell_rect(self, cell: tuple[int, int]) -> pygame.Rect:
-        row, column = cell
-        return pygame.Rect(
-            self.board_rect.left + column * self.cell_size,
-            self.board_rect.top + row * self.cell_size,
-            self.cell_size,
-            self.cell_size,
-        )
-
     def _fill_cell(
         self, cell: tuple[int, int], color: tuple[int, int, int, int]
     ) -> None:
-        rect = self._cell_rect(cell).inflate(-4, -4)
+        rect = self.layout.cell_rect(cell).inflate(-4, -4)
         if rect.width <= 0 or rect.height <= 0:
             return
         surface = pygame.Surface(rect.size, pygame.SRCALPHA)
@@ -172,7 +163,7 @@ class PlaybackScreen[Draft, Frame]:
     def _outline_cell(
         self, cell: tuple[int, int], color: Color, width: int = 3
     ) -> None:
-        rect = self._cell_rect(cell).inflate(-4, -4)
+        rect = self.layout.cell_rect(cell).inflate(-4, -4)
         if rect.width <= 0 or rect.height <= 0:
             return
         pygame.draw.rect(
@@ -190,11 +181,17 @@ class PlaybackScreen[Draft, Frame]:
             for text, center in (
                 (
                     f"C{index + 1}",
-                    (self._cell_rect((0, index)).centerx, self.board_rect.top - 13),
+                    (
+                        self.layout.cell_rect((0, index)).centerx,
+                        self.board_rect.top - 13,
+                    ),
                 ),
                 (
                     f"R{index + 1}",
-                    (self.board_rect.left - 17, self._cell_rect((index, 0)).centery),
+                    (
+                        self.board_rect.left - 17,
+                        self.layout.cell_rect((index, 0)).centery,
+                    ),
                 ),
             ):
                 label = self.fonts.info.render(text, True, GRAY)
@@ -290,14 +287,12 @@ class PlaybackScreen[Draft, Frame]:
                 (x, bottom - 25),
             )
         self.play_button.text = "일시정지" if self.autoplay_enabled else "재생"
-        mouse_pos = pygame.mouse.get_pos()
         for button in (
             self.previous_button,
             self.play_button,
             self.next_button,
             self.edit_button,
         ):
-            button.update_hover(mouse_pos)
             button.draw(self.screen)
         for offset, text in (
             (-32, "←/→ · Home/End 이동"),

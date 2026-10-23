@@ -142,7 +142,7 @@ def test_removed_candidate_has_a_red_strike(
 
     visualizer._draw_candidate_marks(0, 2, frozenset({1}), frozenset({5}))
 
-    center = visualizer._cell_rect((0, 2)).center
+    center = visualizer.layout.cell_rect((0, 2)).center
     assert tuple(visualizer.screen.get_at((center[0] - 4, center[1]))[:3]) == (
         220,
         38,

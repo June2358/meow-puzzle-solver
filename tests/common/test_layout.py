@@ -40,3 +40,30 @@ def test_info_font_is_shared_while_domain_fonts_keep_their_sizes():
         38,
         15,
     )
+
+
+@pytest.mark.parametrize(
+    "size, cell, expected, first",
+    (
+        (1, (0, 0), (45, 70, 540, 540), (45, 70)),
+        (8, (7, 7), (516, 541, 67, 67), (47, 72)),
+        (26, (25, 25), (555, 580, 20, 20), (55, 80)),
+    ),
+)
+def test_cell_geometry_matches_the_centered_board_and_excludes_its_far_edges(
+    size, cell, expected, first
+):
+    layout = get_board_layout(size)
+    rect = pygame.Rect(expected)
+
+    assert layout.cell_rect(cell) == rect
+    assert layout.cell_at(first) == (0, 0)
+    assert layout.cell_at(rect.center) == cell
+    assert layout.cell_at((rect.right - 1, rect.bottom - 1)) == cell
+    for position in (
+        (first[0] - 1, first[1]),
+        (first[0], first[1] - 1),
+        (rect.right, rect.bottom - 1),
+        (rect.right - 1, rect.bottom),
+    ):
+        assert layout.cell_at(position) is None

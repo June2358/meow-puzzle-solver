@@ -209,7 +209,7 @@ class SudokuVisualizer(PlaybackScreen[Grid, SolveStep]):
         for row in range(SIZE):
             for col in range(SIZE):
                 value = step.grid[row][col]
-                center = self._cell_rect((row, col)).center
+                center = self.layout.cell_rect((row, col)).center
                 if value:
                     if (row, col) in self.puzzle.givens:
                         color = BLACK
@@ -232,7 +232,7 @@ class SudokuVisualizer(PlaybackScreen[Grid, SolveStep]):
         candidates: frozenset[int],
         removed: frozenset[int],
     ) -> None:
-        rect = self._cell_rect((row, col))
+        rect = self.layout.cell_rect((row, col))
         for value in range(1, SIZE + 1):
             if value not in candidates and value not in removed:
                 continue

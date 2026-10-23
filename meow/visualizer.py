@@ -205,7 +205,7 @@ class MeowVisualizer(PlaybackScreen[RegionGrid, PlaybackFrame]):
             pygame.draw.rect(
                 self.screen,
                 self.region_colors[label],
-                self._cell_rect(cell),
+                self.layout.cell_rect(cell),
             )
 
     def _draw_cell_states(self, frame: PlaybackFrame) -> None:
@@ -217,7 +217,7 @@ class MeowVisualizer(PlaybackScreen[RegionGrid, PlaybackFrame]):
 
         for cell in self.puzzle.cells:
             state = frame.snapshot.status_at(cell)
-            rect = self._cell_rect(cell)
+            rect = self.layout.cell_rect(cell)
             if state is CellState.EXCLUDED:
                 _draw_x(self.screen, rect, RED if cell in new_exclusions else GRAY)
             elif state is CellState.CAT:

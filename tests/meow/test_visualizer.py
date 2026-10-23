@@ -110,7 +110,7 @@ def test_new_exclusion_preserves_region_color_and_uses_red_x() -> None:
     )
     deduction = visualizer.current_frame.logic_step.deduction
     cell = deduction.exclusions[0]
-    rect = visualizer._cell_rect(cell)
+    rect = visualizer.layout.cell_rect(cell)
 
     visualizer.draw()
 

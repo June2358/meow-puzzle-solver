@@ -1,7 +1,10 @@
+import pytest
+
 from meow.logic_solver import solve_logically
 from meow.model import Puzzle
 from meow.puzzle_catalog import load_preset
 from meow.solve_types import LogicStatus
+from meow.state import CellState, LogicSnapshot, LogicState
 
 
 def _puzzle(*rows: str) -> Puzzle:
@@ -39,3 +42,56 @@ def test_deterministic_logic_reports_a_contradiction() -> None:
     assert result.status is LogicStatus.CONTRADICTION
     assert result.final_state.has_contradiction()
     assert result.message
+
+
+@pytest.mark.parametrize(
+    ("rows", "cats", "excluded", "message"),
+    (
+        (
+            ("ABC",) * 3,
+            {(0, 0), (0, 2)},
+            {(1, 0), (1, 1), (1, 2)},
+            "R1C1과 R1C3의 고양이가 충돌합니다.",
+        ),
+        (
+            ("ABC",) * 3,
+            set(),
+            {(0, 0), (0, 1), (0, 2), (1, 0), (2, 0)},
+            "행 1에 가능한 칸이 없습니다.",
+        ),
+        (("ABC",) * 3, set(), {(0, 0), (1, 0), (2, 0)}, "열 1에 가능한 칸이 없습니다."),
+        (
+            ("AAB", "ACC", "BCC"),
+            set(),
+            {(0, 0), (0, 1), (1, 0)},
+            "표시된 색상 영역에 고양이를 놓을 칸이 없습니다.",
+        ),
+        (("ABC",) * 3, set(), set(), None),
+    ),
+)
+def test_snapshot_and_logic_use_the_same_first_contradiction(
+    rows, cats, excluded, message
+) -> None:
+    puzzle = _puzzle(*rows)
+    snapshot = LogicSnapshot(
+        puzzle,
+        tuple(
+            tuple(
+                CellState.CAT
+                if (row, col) in cats
+                else CellState.EXCLUDED
+                if (row, col) in excluded
+                else CellState.POSSIBLE
+                for col in range(puzzle.size)
+            )
+            for row in range(puzzle.size)
+        ),
+    )
+
+    assert snapshot.contradiction_message() == message
+    assert snapshot.has_contradiction() is (message is not None)
+    if message is not None:
+        result = solve_logically(puzzle, LogicState.from_snapshot(snapshot))
+        assert result.status is LogicStatus.CONTRADICTION
+        assert result.message == message
+        assert result.steps == ()

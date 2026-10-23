@@ -19,6 +19,24 @@ class BoardLayout:
     panel_rect: pygame.Rect
     window_size: tuple[int, int]
 
+    def cell_rect(self, cell: tuple[int, int]) -> pygame.Rect:
+        row, column = cell
+        return pygame.Rect(
+            self.board_rect.left + column * self.cell_size,
+            self.board_rect.top + row * self.cell_size,
+            self.cell_size,
+            self.cell_size,
+        )
+
+    def cell_at(self, position: tuple[int, int]) -> tuple[int, int] | None:
+        if not self.board_rect.collidepoint(position):
+            return None
+        x, y = position
+        return (
+            (y - self.board_rect.top) // self.cell_size,
+            (x - self.board_rect.left) // self.cell_size,
+        )
+
 
 def get_board_layout(size: int) -> BoardLayout:
     if type(size) is not int:

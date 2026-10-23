@@ -66,17 +66,9 @@ class SudokuInputDialog(InputDialog[Puzzle]):
         self._clear_message()
 
     def _draw_grid(self) -> None:
-        draw_conflict_cells(
-            self.screen,
-            self.conflicting_cells,
-            (self.grid_start_x, self.grid_start_y),
-            self.cell_size,
-        )
+        draw_conflict_cells(self.screen, self.conflicting_cells, self.layout)
         if self.selected_cell is not None:
-            row, col = self.selected_cell
-            x = self.grid_start_x + col * self.cell_size
-            y = self.grid_start_y + row * self.cell_size
-            rect = pygame.Rect(x + 3, y + 3, self.cell_size - 6, self.cell_size - 6)
+            rect = self.layout.cell_rect(self.selected_cell).inflate(-6, -6)
             color = (
                 RED if self.selected_cell in self.conflicting_cells else ACCENT_YELLOW
             )
@@ -98,10 +90,7 @@ class SudokuInputDialog(InputDialog[Puzzle]):
                     continue
                 color = RED if (row, col) in self.conflicting_cells else BLACK
                 rendered = self.fonts.number.render(str(value), True, color)
-                center = (
-                    self.grid_start_x + col * self.cell_size + self.cell_size // 2,
-                    self.grid_start_y + row * self.cell_size + self.cell_size // 2,
-                )
+                center = self.layout.cell_rect((row, col)).center
                 self.screen.blit(rendered, rendered.get_rect(center=center))
 
     def _load_json_text(self, text: str) -> None:

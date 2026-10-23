@@ -120,7 +120,7 @@ class MeowInputDialog(InputDialog[Puzzle]):
         elif event.type == pygame.MOUSEMOTION and self._dragging:
             buttons = getattr(event, "buttons", (False, False, False))
             if buttons and buttons[0] and self._drag_label is not None:
-                cell = self._cell_at(event.pos)
+                cell = self.layout.cell_at(event.pos)
                 if cell is not None:
                     self._set_cell(cell, self._drag_label, advance=False)
 
@@ -134,7 +134,7 @@ class MeowInputDialog(InputDialog[Puzzle]):
             self.size_focused = True
             self._replace_size_on_digit = True
             return True
-        cell = self._cell_at(position)
+        cell = self.layout.cell_at(position)
         if cell is not None:
             self.selected_cell = cell
             self._drag_label = self.draft.label_at(cell)
@@ -185,12 +185,7 @@ class MeowInputDialog(InputDialog[Puzzle]):
         for row in range(self.draft.size):
             for column in range(self.draft.size):
                 label = self.draft.grid[row][column]
-                rect = pygame.Rect(
-                    self.grid_start_x + column * self.cell_size,
-                    self.grid_start_y + row * self.cell_size,
-                    self.cell_size,
-                    self.cell_size,
-                )
+                rect = self.layout.cell_rect((row, column))
                 pygame.draw.rect(self.screen, colors.get(label, WHITE), rect)
                 if label is not None and self.cell_size >= 18:
                     text = self._fit_label(
@@ -203,13 +198,7 @@ class MeowInputDialog(InputDialog[Puzzle]):
                         )
 
         if self.selected_cell is not None:
-            row, column = self.selected_cell
-            rect = pygame.Rect(
-                self.grid_start_x + column * self.cell_size + 2,
-                self.grid_start_y + row * self.cell_size + 2,
-                max(1, self.cell_size - 4),
-                max(1, self.cell_size - 4),
-            )
+            rect = self.layout.cell_rect(self.selected_cell).inflate(-4, -4)
             fill = pygame.Surface(rect.size, pygame.SRCALPHA)
             fill.fill((*ACCENT_YELLOW_LIGHT, 70))
             self.screen.blit(fill, rect.topleft)

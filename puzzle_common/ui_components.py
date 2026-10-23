@@ -40,7 +40,6 @@ class Button:
         self.border_color = border_color
         self.font = font
         self.text_color = text_color
-        self.is_hovered = False
         self._shadow_surface = pygame.Surface(self.rect.size, pygame.SRCALPHA)
         pygame.draw.rect(
             self._shadow_surface,
@@ -48,9 +47,6 @@ class Button:
             self._shadow_surface.get_rect(),
             border_radius=_BUTTON_BORDER_RADIUS,
         )
-
-    def update_hover(self, mouse_pos: tuple[int, int]) -> None:
-        self.is_hovered = self.rect.collidepoint(mouse_pos)
 
     def is_clicked(self, mouse_pos: tuple[int, int]) -> bool:
         return self.rect.collidepoint(mouse_pos)
@@ -62,15 +58,21 @@ class Button:
         shadow_rect = self.rect.move(_BUTTON_SHADOW_OFFSET, _BUTTON_SHADOW_OFFSET)
         screen.blit(self._shadow_surface, shadow_rect.topleft)
 
-        self._draw_rect(screen, color, self.rect)
-        self._draw_rect(screen, border_color, self.rect, width=1)
+        pygame.draw.rect(screen, color, self.rect, border_radius=_BUTTON_BORDER_RADIUS)
+        pygame.draw.rect(
+            screen,
+            border_color,
+            self.rect,
+            width=1,
+            border_radius=_BUTTON_BORDER_RADIUS,
+        )
 
         text_surface = self.font.render(self.text, True, self.text_color)
         text_rect = text_surface.get_rect(center=self.rect.center)
         screen.blit(text_surface, text_rect)
 
     def _get_color(self) -> Color:
-        if self.is_hovered:
+        if self.rect.collidepoint(pygame.mouse.get_pos()):
             if self.hover_color is not None:
                 return self.hover_color
             return tuple(
@@ -81,18 +83,3 @@ class Button:
     @staticmethod
     def _darken(color: Color) -> Color:
         return tuple(max(0, channel - _BUTTON_BORDER_DARKEN) for channel in color)
-
-    @staticmethod
-    def _draw_rect(
-        screen: pygame.Surface,
-        color: Color,
-        rect: pygame.Rect,
-        width: int = 0,
-    ) -> None:
-        pygame.draw.rect(
-            screen,
-            color,
-            rect,
-            width=width,
-            border_radius=_BUTTON_BORDER_RADIUS,
-        )

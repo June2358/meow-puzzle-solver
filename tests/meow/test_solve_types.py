@@ -1,3 +1,4 @@
+from meow.model import Puzzle
 from meow.puzzle_catalog import load_preset
 from meow.solve_types import (
     SOLVER_ALGORITHM_LABELS,
@@ -5,11 +6,13 @@ from meow.solve_types import (
     TECHNIQUE_LABELS,
     SolverAlgorithm,
     Technique,
+    UnitKind,
 )
 from meow.state import LogicState
 from meow.techniques import (
     CONTAINER_MATCHING_FINDERS,
     UNIT_SUPPORT_FINDERS,
+    _active_units,
     find_next_deduction,
 )
 
@@ -50,3 +53,16 @@ def test_deductions_prefer_direct_propagation_then_container_matching() -> None:
     deduction = find_next_deduction(state.snapshot())
     assert deduction is not None
     assert deduction.algorithm is SolverAlgorithm.DIRECT_PROPAGATION
+
+
+def test_active_units_skip_cats_and_empty_units_without_reordering() -> None:
+    puzzle = Puzzle.from_region_grid((tuple("ABCD"),) * 4)
+    state = LogicState(puzzle)
+    state.place_cat((2, 2))
+    for cell in (*puzzle.rows[1], (0, 3)):
+        state.exclude(cell)
+
+    assert tuple(_active_units(state.snapshot(), UnitKind.ROW)) == (
+        (0, puzzle.rows[0], ((0, 0), (0, 1), (0, 2))),
+        (3, puzzle.rows[3], ((3, 0), (3, 1), (3, 2), (3, 3))),
+    )

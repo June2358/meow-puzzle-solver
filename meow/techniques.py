@@ -6,10 +6,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator
 from itertools import combinations
 from typing import Final
 
+from puzzle_common.constraints import locked_candidate_targets
 from puzzle_common.coordinates import cell_name as _cell_name
 
 from .model import Cell, Puzzle, Unit
@@ -57,12 +58,17 @@ def _unit_index(puzzle: Puzzle, kind: UnitKind, cell: Cell) -> int:
     return puzzle.region_of(cell)
 
 
-def _has_cat(state: LogicSnapshot, unit: Sequence[Cell]) -> bool:
-    return any(state.is_cat(cell) for cell in unit)
+def _active_units(
+    state: LogicSnapshot, kind: UnitKind
+) -> Iterator[tuple[int, Unit, tuple[Cell, ...]]]:
+    """Yield unfilled units with candidates in their original order."""
 
-
-def _candidates(state: LogicSnapshot, unit: Sequence[Cell]) -> tuple[Cell, ...]:
-    return tuple(sorted(state.candidates_for(unit)))
+    for index, unit in enumerate(_units(state.puzzle, kind)):
+        if state.cats_in(unit):
+            continue
+        candidates = state.candidates_for(unit)
+        if candidates:
+            yield index, unit, candidates
 
 
 def find_placed_cat_elimination(state: LogicSnapshot) -> Deduction | None:
@@ -95,10 +101,7 @@ def _find_single(state: LogicSnapshot, kind: UnitKind) -> Deduction | None:
         UnitKind.REGION: Technique.REGION_SINGLE,
     }[kind]
 
-    for index, unit in enumerate(_units(puzzle, kind)):
-        if _has_cat(state, unit):
-            continue
-        candidates = _candidates(state, unit)
+    for index, _, candidates in _active_units(state, kind):
         if len(candidates) != 1:
             continue
         cell = candidates[0]
@@ -152,29 +155,17 @@ def find_region_line_lock(state: LogicSnapshot) -> Deduction | None:
 
     puzzle = state.puzzle
     for source_kind, target_kind, technique in _LINE_LOCK_SPECS:
-        for source_index, source in enumerate(_units(puzzle, source_kind)):
-            if _has_cat(state, source):
-                continue
-            candidates = _candidates(state, source)
-            if not candidates:
-                continue
-            target_indices = {
-                _unit_index(puzzle, target_kind, cell) for cell in candidates
-            }
-            if len(target_indices) != 1:
-                continue
-
-            target_index = min(target_indices)
-            target = _units(puzzle, target_kind)[target_index]
-            source_cells = frozenset(source)
-            exclusions = tuple(
-                cell
-                for cell in target
-                if cell not in source_cells and state.is_possible(cell)
+        for source_index, source, candidates in _active_units(state, source_kind):
+            locked = locked_candidate_targets(
+                frozenset(source),
+                candidates,
+                _units(puzzle, target_kind),
+                lambda cell, kind=target_kind: _unit_index(puzzle, kind, cell),
+                state.is_possible,
             )
-            if not exclusions:
+            if locked is None:
                 continue
-
+            target_index, exclusions = locked
             source_ref = UnitRef(source_kind, source_index)
             target_ref = UnitRef(target_kind, target_index)
             return Deduction(
@@ -211,19 +202,10 @@ def find_unit_support(state: LogicSnapshot) -> Deduction | None:
     puzzle = state.puzzle
     possible_cells = frozenset(state.possible_cells)
     for kind in _UNIT_SUPPORT_SOURCE_ORDER:
-        for index, unit in enumerate(_units(puzzle, kind)):
-            if _has_cat(state, unit):
-                continue
-            candidates = _candidates(state, unit)
-            if not candidates:
-                continue
-
-            common_conflicts = set(puzzle.conflicts[candidates[0]])
-            common_conflicts.intersection_update(possible_cells)
-            for candidate in candidates[1:]:
-                common_conflicts.intersection_update(puzzle.conflicts[candidate])
-                if not common_conflicts:
-                    break
+        for index, _, candidates in _active_units(state, kind):
+            common_conflicts = possible_cells.intersection(
+                *(puzzle.conflicts[cell] for cell in candidates)
+            )
             exclusions = tuple(sorted(common_conflicts))
             if not exclusions:
                 continue
@@ -298,14 +280,8 @@ def find_hall_lock(state: LogicSnapshot) -> Deduction | None:
 
     puzzle = state.puzzle
     for source_kind, target_kind in _HALL_KIND_PAIRS:
-        source_units = _units(puzzle, source_kind)
         active: list[tuple[int, tuple[Cell, ...], frozenset[int]]] = []
-        for source_index, source in enumerate(source_units):
-            if _has_cat(state, source):
-                continue
-            candidates = _candidates(state, source)
-            if not candidates:
-                continue
+        for source_index, _, candidates in _active_units(state, source_kind):
             targets = frozenset(
                 _unit_index(puzzle, target_kind, cell) for cell in candidates
             )

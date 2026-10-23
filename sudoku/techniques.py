@@ -12,6 +12,7 @@ from collections.abc import Callable, Iterator
 from itertools import combinations
 from typing import Final
 
+from puzzle_common.constraints import locked_candidate_targets
 from puzzle_common.coordinates import cell_name as _cell_name
 
 from .board import Grid
@@ -232,55 +233,33 @@ def find_locked_candidates_pointing(
             if len(positions) < 2:
                 continue
 
-            rows = {row for row, _ in positions}
-            if len(rows) == 1:
-                row = min(rows)
-                targets = tuple(
-                    cell
-                    for cell in ROWS[row]
-                    if cell not in box_cells
-                    and grid[cell[0]][cell[1]] == 0
-                    and value in candidates[cell[0]][cell[1]]
+            for axis, (line_name, lines) in enumerate((("행", ROWS), ("열", COLS))):
+                locked = locked_candidate_targets(
+                    box_cells,
+                    positions,
+                    lines,
+                    lambda cell, axis=axis: cell[axis],
+                    lambda cell, value=value: (
+                        grid[cell[0]][cell[1]] == 0
+                        and value in candidates[cell[0]][cell[1]]
+                    ),
                 )
-                if targets:
-                    eliminations = tuple(
-                        Elimination(cell, frozenset({value})) for cell in targets
-                    )
-                    return TechniqueResult(
-                        technique=Technique.LOCKED_CANDIDATES_POINTING,
-                        eliminations=eliminations,
-                        evidence_cells=positions,
-                        context_cells=_merge_cells(box, ROWS[row]),
-                        explanation=(
-                            f"박스 {box_index + 1}의 후보 {value}가 행 {row + 1}에 "
-                            "고정되어 있습니다."
-                        ),
-                    )
-
-            cols = {col for _, col in positions}
-            if len(cols) == 1:
-                col = min(cols)
-                targets = tuple(
-                    cell
-                    for cell in COLS[col]
-                    if cell not in box_cells
-                    and grid[cell[0]][cell[1]] == 0
-                    and value in candidates[cell[0]][cell[1]]
+                if locked is None:
+                    continue
+                line_index, targets = locked
+                eliminations = tuple(
+                    Elimination(cell, frozenset({value})) for cell in targets
                 )
-                if targets:
-                    eliminations = tuple(
-                        Elimination(cell, frozenset({value})) for cell in targets
-                    )
-                    return TechniqueResult(
-                        technique=Technique.LOCKED_CANDIDATES_POINTING,
-                        eliminations=eliminations,
-                        evidence_cells=positions,
-                        context_cells=_merge_cells(box, COLS[col]),
-                        explanation=(
-                            f"박스 {box_index + 1}의 후보 {value}가 열 {col + 1}에 "
-                            "고정되어 있습니다."
-                        ),
-                    )
+                return TechniqueResult(
+                    technique=Technique.LOCKED_CANDIDATES_POINTING,
+                    eliminations=eliminations,
+                    evidence_cells=positions,
+                    context_cells=_merge_cells(box, lines[line_index]),
+                    explanation=(
+                        f"박스 {box_index + 1}의 후보 {value}가 "
+                        f"{line_name} {line_index + 1}에 고정되어 있습니다."
+                    ),
+                )
     return None
 
 
@@ -308,22 +287,20 @@ def find_locked_candidates_claiming(
                 if len(positions) < 2:
                     continue
 
-                box_indices = {_box_index(cell) for cell in positions}
-                if len(box_indices) != 1:
-                    continue
-
-                box_index = min(box_indices)
-                box = BOXES[box_index]
-                targets = tuple(
-                    cell
-                    for cell in box
-                    if cell not in line_cells
-                    and grid[cell[0]][cell[1]] == 0
-                    and value in candidates[cell[0]][cell[1]]
+                locked = locked_candidate_targets(
+                    line_cells,
+                    positions,
+                    BOXES,
+                    _box_index,
+                    lambda cell, value=value: (
+                        grid[cell[0]][cell[1]] == 0
+                        and value in candidates[cell[0]][cell[1]]
+                    ),
                 )
-                if not targets:
+                if locked is None:
                     continue
-
+                box_index, targets = locked
+                box = BOXES[box_index]
                 eliminations = tuple(
                     Elimination(cell, frozenset({value})) for cell in targets
                 )

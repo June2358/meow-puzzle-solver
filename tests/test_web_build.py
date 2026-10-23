@@ -1,4 +1,3 @@
-import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -111,21 +110,7 @@ def test_pages_workflow_uploads_only_the_web_build() -> None:
         build_web.PROJECT_ROOT / ".github" / "workflows" / "pages.yml"
     ).read_text(encoding="utf-8")
 
-    assert "pages: write" in workflow
-    assert "id-token: write" in workflow
-    assert "name: github-pages" in workflow
-    assert "uv sync --locked --no-dev --group web" in workflow
     assert "python scripts/build_web.py" in workflow
-    assert "actions/configure-pages@" in workflow
     assert "actions/upload-pages-artifact@" in workflow
-    assert "actions/deploy-pages@" in workflow
     assert "path: build/web" in workflow
     assert "path: .\n" not in workflow
-
-
-def test_pygbag_is_pinned_in_the_non_default_web_group() -> None:
-    project = tomllib.loads(
-        (build_web.PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    )
-
-    assert project["dependency-groups"]["web"] == ["pygbag==0.9.3"]

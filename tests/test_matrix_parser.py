@@ -19,6 +19,8 @@ def test_parse_matrix_json_accepts_a_valid_grid() -> None:
         "not JSON",
         json.dumps([[0] * 9 for _ in range(8)]),
         json.dumps([[10] + [0] * 8] + [[0] * 9 for _ in range(8)]),
+        pytest.param("[[" + "1" * 4301 + "]]", id="oversized_integer"),
+        pytest.param("[" * 10000 + "0" + "]" * 10000, id="deep_nesting"),
     ],
 )
 def test_parse_matrix_json_rejects_representative_invalid_inputs(text: str) -> None:

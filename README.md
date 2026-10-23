@@ -51,12 +51,39 @@ uv run --locked ruff format --check .
 uv run --locked python -m pytest -q -W error
 ```
 
+전체 풀이 성능과 해의 유효성·단서 보존·결과 재현성은 다음 명령으로 검사합니다.
+문제별 준비 실행 후 7회 측정한 중앙값을 출력합니다.
+
+```powershell
+uv run python -m scripts.benchmark_solver
+```
+
+### 후보 탐색 최적화
+
+[Hidden Pair/Triple](https://hodoku.sourceforge.net/en/tech_hidden.php)은
+같은 하우스의 두/세 칸에 갇힌 숫자 조합입니다. 후보 위치가 기법 크기보다
+많은 숫자는 조합에서 미리 제외합니다. 위치가 하나인 숫자는 유지하며,
+유효한 기법의 선택 순서와 설명은 바꾸지 않습니다.
+
+2026-10-11, Windows·Python 3.12.2에서 원본 `dacb086`과 최적화를 같은
+프로세스에서 번갈아 7회 실행한 전체 풀이 중앙값입니다.
+
+| 문제 | 개선 전 | 개선 후 | 속도 비율 |
+|---|---:|---:|---:|
+| Norvig hard | 12.04 ms | 9.41 ms | 1.28× |
+| Inkala 2010 | 171.47 ms | 103.84 ms | 1.65× |
+| 빈 보드: 두 해 확인 | 248.65 ms | 85.72 ms | 2.90× |
+
+[Norvig의 어려운 문제 95개](https://www.norvig.com/top95.txt)와 내장 프리셋
+6개는 해·판정·전체 풀이 기록이 원본과 동일했습니다. 95개 전체 실행은
+8.053초에서 4.821초로 줄었습니다. 측정값은 기기와 실행 부하에 따라 달라집니다.
+
 ## 문제 입력
 
 ### 직접 입력
 
 - 마우스 클릭 또는 화살표 키: 칸 선택
-- 숫자 키 `1`~`9`: 숫자 입력
+- 숫자 키 또는 키보드 숫자패드 `1`~`9`: 숫자 입력
 - `0`, `Delete`, `Backspace`: 숫자 삭제
 - 난이도 버튼: 내장 문제 불러오기
 - `Enter` 또는 `S`: 풀이 시작
@@ -144,6 +171,7 @@ JSON만 불러옵니다. 결과는 반드시 화면에서 원본 이미지와 �
 │   ├── ci.yml                  # Windows 자동 검사
 │   └── pages.yml               # 웹페이지 빌드·게시 자동화
 ├── scripts/
+│   ├── benchmark_solver.py     # 정확성 검사와 전체 풀이 성능 측정
 │   └── build_web.py            # Pygbag 웹 산출물 생성
 ├── sudoku/
 │   ├── __main__.py             # python -m sudoku 진입점

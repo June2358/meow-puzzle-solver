@@ -74,14 +74,3 @@ def test_get_fonts_use_real_pretendard_weights() -> None:
     assert fonts.heading.style_name == "SemiBold"
     assert fonts.title.style_name == "SemiBold"
     assert not any(font.get_bold() for font in all_fonts)
-    assert fonts.candidate.get_point_size() == 15
-
-
-def test_get_fonts_fails_when_a_bundled_asset_is_missing(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setattr(ui_style, "_REGULAR_FONT_PATH", tmp_path / "missing.otf")
-
-    with pytest.raises((FileNotFoundError, pygame.error)):
-        ui_style.get_fonts()

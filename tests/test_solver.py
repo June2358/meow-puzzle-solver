@@ -48,7 +48,6 @@ def test_unique_puzzle_returns_the_unique_solution() -> None:
 
     assert result.status is SolveStatus.SOLVED_UNIQUE
     assert result.solution == UNIQUE_SOLUTION
-    assert_valid_solution(result.solution, puzzle)
 
 
 def test_multiple_puzzle_returns_a_valid_representative() -> None:

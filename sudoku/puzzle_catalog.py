@@ -1,18 +1,15 @@
 """Validated built-in Sudoku presets."""
 
-import json
 from collections.abc import Mapping
 from functools import cache
-from importlib import resources
 from types import MappingProxyType
+
+from puzzle_common.catalog import PuzzleDataError as PuzzleDataError
+from puzzle_common.catalog import read_catalog
 
 from .board import Grid, InvalidBoardError, Puzzle
 
 type PuzzleCatalog = Mapping[str, Grid]
-
-
-class PuzzleDataError(RuntimeError):
-    """Raised when the packaged preset catalog is missing or malformed."""
 
 
 def _validate_catalog(data: object) -> PuzzleCatalog:
@@ -44,20 +41,4 @@ def _validate_catalog(data: object) -> PuzzleCatalog:
 def load_puzzle_catalog() -> PuzzleCatalog:
     """Load and validate the packaged preset catalog once."""
 
-    try:
-        text = (
-            resources.files(__package__)
-            .joinpath("puzzles.json")
-            .read_text(encoding="utf-8")
-        )
-    except (FileNotFoundError, OSError) as exc:
-        raise PuzzleDataError("패키지의 puzzles.json을 읽을 수 없습니다.") from exc
-
-    try:
-        decoded = json.loads(text)
-    except json.JSONDecodeError as exc:
-        raise PuzzleDataError(
-            f"puzzles.json이 올바른 JSON이 아닙니다: {exc.msg} "
-            f"(줄 {exc.lineno}, 열 {exc.colno})"
-        ) from exc
-    return _validate_catalog(decoded)
+    return _validate_catalog(read_catalog(__package__))

@@ -5,7 +5,7 @@ import pygame
 import pytest
 from sample_puzzles import UNIQUE_GRID
 
-import sudoku.input_dialog as input_dialog_module
+import puzzle_common.input_dialog as input_dialog_module
 from puzzle_common.web_text_dialog import (
     WebTextDialogError,
     WebTextDialogResult,
@@ -64,7 +64,7 @@ def test_invalid_paste_preserves_the_existing_board(
     before = validate_grid(dialog.board)
     monkeypatch.setattr(input_dialog_module, "paste_text", lambda: "not JSON")
 
-    dialog._paste_matrix()
+    dialog._paste_json()
 
     assert validate_grid(dialog.board) == before
     assert dialog.validation_error
@@ -79,7 +79,7 @@ def test_conflicting_matrix_can_be_edited_but_not_started(
         input_dialog_module, "paste_text", lambda: json.dumps(conflicting)
     )
 
-    dialog._paste_matrix()
+    dialog._paste_json()
 
     assert validate_grid(dialog.board)[0][:2] == (5, 5)
     assert dialog._handle_start() is None
@@ -96,8 +96,8 @@ def test_web_json_submit_reuses_parser_then_closes_on_success(
     monkeypatch.setattr(input_dialog_module, "is_web_runtime", lambda: True)
     monkeypatch.setattr(
         input_dialog_module,
-        "open_json_dialog",
-        lambda: browser_dialog,
+        "WebTextDialog",
+        lambda **kwargs: browser_dialog,
     )
 
     dialog._handle_json_action()
@@ -119,8 +119,8 @@ def test_invalid_web_json_preserves_text_dialog_and_board(
     monkeypatch.setattr(input_dialog_module, "is_web_runtime", lambda: True)
     monkeypatch.setattr(
         input_dialog_module,
-        "open_json_dialog",
-        lambda: browser_dialog,
+        "WebTextDialog",
+        lambda **kwargs: browser_dialog,
     )
 
     dialog._handle_json_action()
@@ -141,8 +141,8 @@ def test_web_prompt_is_shown_without_clipboard_access(
     monkeypatch.setattr(input_dialog_module, "is_web_runtime", lambda: True)
     monkeypatch.setattr(
         input_dialog_module,
-        "open_prompt_dialog",
-        lambda text: prompt_calls.append(text) or browser_dialog,
+        "WebTextDialog",
+        lambda **kwargs: prompt_calls.append(kwargs["text"]) or browser_dialog,
     )
     monkeypatch.setattr(
         input_dialog_module,
@@ -152,7 +152,7 @@ def test_web_prompt_is_shown_without_clipboard_access(
 
     dialog._handle_prompt_action()
 
-    assert prompt_calls == [input_dialog_module.OCR_MATRIX_PROMPT]
+    assert prompt_calls == [dialog.prompt]
     assert dialog._web_text_dialog is browser_dialog
 
 
@@ -160,11 +160,11 @@ def test_web_dialog_bridge_failure_becomes_pygame_validation_error(
     dialog: SudokuInputDialog,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fail_to_open():
+    def fail_to_open(**kwargs):
         raise WebTextDialogError("DOM bridge failed")
 
     monkeypatch.setattr(input_dialog_module, "is_web_runtime", lambda: True)
-    monkeypatch.setattr(input_dialog_module, "open_json_dialog", fail_to_open)
+    monkeypatch.setattr(input_dialog_module, "WebTextDialog", fail_to_open)
 
     dialog._handle_json_action()
 

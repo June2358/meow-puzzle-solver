@@ -1,18 +1,22 @@
 import asyncio
+from dataclasses import replace
+from unittest.mock import Mock
 
 import pygame
 import pytest
-from sample_puzzles import UNIQUE_GRID
+from sample_puzzles import UNIQUE_GRID, UNIQUE_SOLUTION
 
-from sudoku.board import Puzzle
-from sudoku.solve_types import SolveResult
-from sudoku.solver import SudokuSolver
-from sudoku.visualizer import (
+from puzzle_common.playback import (
     _AUTOPLAY_INTERVAL,
     _NAVIGATION_REPEAT_DELAY,
     _NAVIGATION_REPEAT_INTERVAL,
-    SudokuVisualizer,
 )
+from puzzle_common.ui_style import wrap_text
+from sudoku.board import Puzzle
+from sudoku.puzzle_catalog import load_puzzle_catalog
+from sudoku.solve_types import SolveResult
+from sudoku.solver import SudokuSolver
+from sudoku.visualizer import SudokuVisualizer
 
 
 @pytest.fixture(scope="module")
@@ -47,6 +51,87 @@ def test_visualizer_navigation_stays_within_the_trace(
     visualizer._set_index(10_000)
     assert visualizer.current_step_index == len(visualizer.result.steps) - 1
     assert not visualizer._navigate(1)
+
+
+def test_presentation_keeps_assumption_reason_and_structured_effects() -> None:
+    puzzle = Puzzle(load_puzzle_catalog()["극한"])
+    visualizer = SudokuVisualizer(puzzle, SudokuSolver(puzzle).solve())
+    visualizer.current_step_index = 6
+
+    details = visualizer._presentation()
+
+    assert details.title == "논리 기법"
+    assert details.reason == "표시된 칸에 가능한 후보가 하나뿐입니다."
+    assert details.effects == (("확정 칸 · 1", ("R2C7 = 5",)),)
+    assert details.assumption == "R2C3 = 1"
+    assert [text for text, _ in details.annotations] == [
+        "Naked Single",
+        "한 단계 가정 중",
+    ]
+    visualizer.draw()
+
+
+def test_multiple_solution_warning_and_last_digit_label() -> None:
+    grid = [list(row) for row in UNIQUE_SOLUTION]
+    for row, col in ((0, 3), (0, 4), (3, 3), (3, 4)):
+        grid[row][col] = 0
+    puzzle = Puzzle(grid)
+    visualizer = SudokuVisualizer(puzzle, SudokuSolver(puzzle).solve())
+
+    assert "복수해" in visualizer._presentation().status[0]
+    visualizer.current_step_index = next(
+        index
+        for index, step in enumerate(visualizer.result.steps)
+        if step.deduction is not None
+        and all(value for row in step.grid for value in row)
+    )
+    details = visualizer._presentation()
+    assert details.annotations[0][0] == "Last Digit"
+    visualizer.draw()
+
+
+@pytest.mark.parametrize("step_index", (2, 3))
+def test_multiple_solution_reason_remains_visible_during_assumption(step_index) -> None:
+    grid = [list(row) for row in UNIQUE_SOLUTION]
+    for row, col in ((0, 3), (0, 4), (3, 3), (3, 4)):
+        grid[row][col] = 0
+    puzzle = Puzzle(grid)
+    visualizer = SudokuVisualizer(puzzle, SudokuSolver(puzzle).solve())
+    visualizer.current_step_index = step_index
+    details = visualizer._presentation()
+    reason_lines = wrap_text(
+        details.reason, visualizer.fonts.body, visualizer.panel_rect.width - 36
+    )
+    assert len(reason_lines) == 2
+    body = Mock(wraps=visualizer.fonts.body)
+    visualizer.fonts = replace(visualizer.fonts, body=body)
+
+    visualizer.draw()
+
+    rendered = [call.args[0] for call in body.render.call_args_list]
+    assert all(line in rendered for line in reason_lines)
+    assert any(details.assumption in line for line in rendered)
+    assert all(
+        any(item in line for line in rendered)
+        for _, items in details.effects
+        for item in items
+    )
+
+
+def test_removed_candidate_has_a_red_strike(
+    solved_case: tuple[Puzzle, SolveResult],
+) -> None:
+    visualizer = SudokuVisualizer(*solved_case)
+    visualizer.screen.fill((255, 255, 255))
+
+    visualizer._draw_candidate_marks(0, 2, frozenset({1}), frozenset({5}))
+
+    center = (visualizer.margin + 2 * visualizer.cell_size + 30, visualizer.margin + 30)
+    assert tuple(visualizer.screen.get_at((center[0] - 4, center[1]))[:3]) == (
+        220,
+        38,
+        38,
+    )
 
 
 def test_held_arrow_key_repeats_and_stops_on_release(
@@ -107,7 +192,7 @@ def test_run_yields_a_frame_then_handles_a_quit_event(
         await asyncio.sleep(0)
         return 1 / 60
 
-    monkeypatch.setattr("sudoku.visualizer.next_frame", advance_frame)
+    monkeypatch.setattr("puzzle_common.playback.next_frame", advance_frame)
     monkeypatch.setattr(
         pygame.event,
         "get",

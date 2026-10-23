@@ -1,11 +1,12 @@
 """Validated built-in MEOW Queens presets stored as package resources."""
 
-import json
 from collections.abc import Mapping
 from functools import cache
-from importlib import resources
 from types import MappingProxyType
 from typing import Final
+
+from puzzle_common.catalog import PuzzleDataError as PuzzleDataError
+from puzzle_common.catalog import read_catalog
 
 from .model import InvalidRegionMapError, Puzzle, RegionGrid
 
@@ -19,10 +20,6 @@ PRESET_NAMES: Final[tuple[str, ...]] = (
 )
 
 type _PuzzleCatalog = Mapping[str, RegionGrid]
-
-
-class PuzzleDataError(RuntimeError):
-    """Raised when the packaged preset catalog is missing or malformed."""
 
 
 def _validate_catalog(data: object) -> _PuzzleCatalog:
@@ -50,23 +47,7 @@ def _validate_catalog(data: object) -> _PuzzleCatalog:
 def _load_puzzle_catalog() -> _PuzzleCatalog:
     """Load and validate the six packaged presets once."""
 
-    try:
-        text = (
-            resources.files(__package__)
-            .joinpath("puzzles.json")
-            .read_text(encoding="utf-8")
-        )
-    except (FileNotFoundError, OSError) as error:
-        raise PuzzleDataError("패키지의 puzzles.json을 읽을 수 없습니다.") from error
-
-    try:
-        decoded = json.loads(text)
-    except json.JSONDecodeError as error:
-        raise PuzzleDataError(
-            f"puzzles.json이 올바른 JSON이 아닙니다: {error.msg} "
-            f"(줄 {error.lineno}, 열 {error.colno})"
-        ) from error
-    return _validate_catalog(decoded)
+    return _validate_catalog(read_catalog(__package__))
 
 
 def load_preset(name: str) -> Puzzle:

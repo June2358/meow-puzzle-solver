@@ -203,11 +203,13 @@ X는 빨간색, 기존 X는 회색으로 나타나며 색상 영역의 원래 �
 - `meow/solver.py`: 한 단계 가정과 분기 탐색
 - `meow/exact_solver.py`: 독립 해 분류
 - `meow/timeline.py`: 화면에 보여줄 선형 풀이 기록
-- `meow/app.py`: 문제 입력과 풀이 재생을 잇는 앱 수명주기
-- `meow/input_dialog.py`: 프리셋·직접 입력·JSON/이미지 전사 입력
-- `meow/web_text_dialog.py`: Web 전용 일회성 DOM textarea
+- `meow/app.py`: 공통 앱 흐름에 연결하는 MEOW 어댑터
+- `meow/input_dialog.py`: 영역 편집·크기·드래그·검증을 공통 입력 화면에 연결
+- `puzzle_common/input_dialog.py`: 프리셋·JSON/프롬프트·클립보드·입력 화면 흐름
+- `puzzle_common/web_text_dialog.py`: Web 전용 일회성 DOM textarea
 - `puzzle_common/runtime.py`: Desktop/Web 공통 frame pacing
-- `meow/visualizer.py`: pygame-ce 보드와 재생 UI
+- `meow/visualizer.py`: 고양이/영역 보드와 풀이 기록의 표시 자료 변환
+- `puzzle_common/playback.py`: 공통 풀이 패널·단계 이동·자동 재생
 - `meow/ui_style.py`: 영역 보드 전용 그리기와 앱별 폰트 크기
 - `puzzle_common/`: 두 앱이 공유하는 버튼·폰트·클립보드·웹 입력 기반
 - `puzzle_common/assets/fonts/`: 번들 한글 폰트와 OFL

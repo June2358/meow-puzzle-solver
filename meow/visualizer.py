@@ -2,30 +2,21 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-
 import pygame
 
-from puzzle_common.runtime import next_frame
-from puzzle_common.ui_components import Button
+from puzzle_common.coordinates import cell_name as _cell_name
+from puzzle_common.playback import PlaybackDetails, PlaybackScreen
 from puzzle_common.ui_style import (
     ACCENT,
     ACCENT_LIGHT,
-    APP_BACKGROUND,
-    BLACK,
-    BORDER,
     GRAY,
-    LIGHT_GRAY,
     ORANGE,
     ORANGE_LIGHT,
-    PRIMARY,
     PRIMARY_DARK,
     RED,
     RED_LIGHT,
     WHITE,
     Color,
-    configure_display,
-    wrap_text,
 )
 
 from .exact_solver import ExactStatus
@@ -40,9 +31,6 @@ from .ui_style import (
     region_palette,
 )
 
-_NAVIGATION_REPEAT_DELAY = 0.36
-_NAVIGATION_REPEAT_INTERVAL = 0.08
-_AUTOPLAY_INTERVAL = 0.9
 _TARGET_BOARD_SIZE = 620
 _MAX_CELL_SIZE = 96
 _MIN_CELL_SIZE = 8
@@ -50,36 +38,6 @@ _MARGIN = 44
 _PANEL_GAP = 26
 _PANEL_WIDTH = 350
 _MIN_WINDOW_HEIGHT = 700
-
-type _NavigationSource = tuple[str, int]
-
-
-def _cell_name(cell: Cell) -> str:
-    row, column = cell
-    return f"R{row + 1}C{column + 1}"
-
-
-def _pack_effect_items(
-    items: tuple[str, ...],
-    font: pygame.font.Font,
-    max_width: int,
-) -> tuple[str, ...]:
-    """Pack complete cell effects onto lines without splitting coordinates."""
-
-    if not items:
-        return ()
-    separator = "   "
-    lines: list[str] = []
-    current = items[0]
-    for item in items[1:]:
-        candidate = f"{current}{separator}{item}"
-        if font.size(candidate)[0] <= max_width:
-            current = candidate
-        else:
-            lines.append(current)
-            current = item
-    lines.append(current)
-    return tuple(lines)
 
 
 def _draw_cat(
@@ -192,8 +150,8 @@ def _draw_x(screen: pygame.Surface, rect: pygame.Rect, color: Color) -> None:
     )
 
 
-class MeowVisualizer:
-    """Navigate immutable playback frames without rerunning the solver."""
+class MeowVisualizer(PlaybackScreen[RegionGrid]):
+    """Interpret MEOW trace frames and render its colored queen board."""
 
     def __init__(self, puzzle: Puzzle, result: SolveResult) -> None:
         if not isinstance(puzzle, Puzzle):
@@ -207,15 +165,6 @@ class MeowVisualizer:
         self.puzzle = puzzle
         self.result = result
         self.timeline = build_timeline(result)
-        self.current_step_index = 0
-        self.running = True
-        self.autoplay_enabled = False
-        self.autoplay_timer = 0.0
-        self._held_navigation_sources: dict[_NavigationSource, int] = {}
-        self._active_navigation_source: _NavigationSource | None = None
-        self._navigation_repeat_timer = 0.0
-        self._navigation_repeat_started = False
-
         self.cell_size = max(
             _MIN_CELL_SIZE,
             min(_MAX_CELL_SIZE, _TARGET_BOARD_SIZE // puzzle.size),
@@ -231,48 +180,59 @@ class MeowVisualizer:
             _PANEL_WIDTH,
             self.height - self.margin * 2,
         )
-        self.screen = configure_display(
-            (width, self.height),
-            "MEOW · Queens 퍼즐 풀이 과정",
-        )
-        self.fonts = get_fonts()
         self.region_colors = region_palette(puzzle.region_labels)
-        self._init_buttons()
+        super().__init__(
+            frame_count=len(self.timeline),
+            edit_draft=puzzle.region_grid,
+            size=(width, self.height),
+            caption="MEOW · Queens 퍼즐 풀이 과정",
+            title="MEOW · Queens 풀이 과정",
+            board_rect=pygame.Rect(
+                *self.board_origin, self.board_size, self.board_size
+            ),
+            panel_rect=self.panel_rect,
+            fonts=get_fonts(),
+        )
+
+    def _draw_board(self) -> None:
+        self._draw_region_backgrounds()
+        draw_region_grid_lines(
+            self.screen,
+            self.puzzle.region_grid,
+            self.board_origin,
+            self.cell_size,
+            region_width=max(2, min(4, self.cell_size // 12)),
+        )
+        self._draw_coordinates()
+        self._draw_cell_states()
+        if self.current_frame.active_assumption is not None:
+            self._outline_cell(self.current_frame.active_assumption, ORANGE, 3)
+
+    def _presentation(self) -> PlaybackDetails:
+        frame = self.current_frame
+        probing = (
+            frame.kind is TimelineKind.LOGIC_STEP
+            and frame.active_assumption is not None
+        )
+        return PlaybackDetails(
+            title=frame.title,
+            reason=frame.message or frame.title,
+            effects=self._effect_groups(),
+            status=self._status_badge(),
+            annotations=(
+                (SOLVER_ALGORITHM_LABELS[SolverAlgorithm.SINGLETON_PROBING], ORANGE),
+            )
+            if probing
+            else (),
+            assumption=f"{_cell_name(frame.active_assumption)} = 고양이"
+            if frame.active_assumption is not None
+            else "",
+            region_colors=self._region_chip_colors(),
+        )
 
     @property
     def current_frame(self) -> PlaybackFrame:
         return self.timeline[self.current_step_index]
-
-    def _init_buttons(self) -> None:
-        inner_x = self.panel_rect.left + 16
-        gap = 8
-        inner_width = self.panel_rect.width - 32
-        third = (inner_width - gap * 2) // 3
-        controls_y = self.panel_rect.bottom - 112
-        self.previous_button = Button(
-            pygame.Rect(inner_x, controls_y, third, 38),
-            "이전",
-            PRIMARY,
-            self.fonts.button,
-        )
-        self.play_button = Button(
-            pygame.Rect(inner_x + third + gap, controls_y, third, 38),
-            "재생",
-            ACCENT,
-            self.fonts.button,
-        )
-        self.next_button = Button(
-            pygame.Rect(inner_x + (third + gap) * 2, controls_y, third, 38),
-            "다음",
-            PRIMARY,
-            self.fonts.button,
-        )
-        self.edit_button = Button(
-            pygame.Rect(inner_x, controls_y + 50, inner_width, 38),
-            "문제 입력으로 돌아가기",
-            PRIMARY_DARK,
-            self.fonts.button,
-        )
 
     def _cell_rect(self, cell: Cell) -> pygame.Rect:
         row, column = cell
@@ -294,34 +254,6 @@ class MeowVisualizer:
             width=max(1, min(width, rect.width // 2)),
             border_radius=max(0, min(5, rect.width // 5)),
         )
-
-    def draw(self) -> None:
-        self.screen.fill(APP_BACKGROUND)
-        board_rect = pygame.Rect(
-            *self.board_origin,
-            self.board_size,
-            self.board_size,
-        )
-        pygame.draw.rect(
-            self.screen,
-            LIGHT_GRAY,
-            board_rect.move(0, 4),
-            border_radius=5,
-        )
-        self._draw_region_backgrounds()
-        draw_region_grid_lines(
-            self.screen,
-            self.puzzle.region_grid,
-            self.board_origin,
-            self.cell_size,
-            region_width=max(2, min(4, self.cell_size // 12)),
-        )
-        self._draw_coordinates()
-        self._draw_cell_states()
-        if self.current_frame.active_assumption is not None:
-            self._outline_cell(self.current_frame.active_assumption, ORANGE, 3)
-        self._draw_panel()
-        pygame.display.flip()
 
     def _draw_region_backgrounds(self) -> None:
         for cell in self.puzzle.cells:
@@ -388,224 +320,6 @@ class MeowVisualizer:
             for index in self.current_frame.region_indices
         )
 
-    def _draw_region_chips(self, x: int, y: int) -> int:
-        colors = self._region_chip_colors()
-        if not colors:
-            return y
-
-        y += 5
-        label = self.fonts.candidate.render("관련 색상 영역", True, GRAY)
-        self.screen.blit(label, (x, y + 1))
-        chip_x = x + label.get_width() + 10
-        chip_size = max(16, self.fonts.candidate.get_height() - 1)
-        for color in colors:
-            rect = pygame.Rect(chip_x, y, chip_size, chip_size)
-            pygame.draw.rect(self.screen, color, rect, border_radius=4)
-            pygame.draw.rect(
-                self.screen,
-                BLACK,
-                rect,
-                width=2,
-                border_radius=4,
-            )
-            chip_x += chip_size + 6
-        return y + max(label.get_height(), chip_size) + 8
-
-    def _draw_panel(self) -> None:
-        pygame.draw.rect(
-            self.screen,
-            LIGHT_GRAY,
-            self.panel_rect.move(0, 4),
-            border_radius=14,
-        )
-        pygame.draw.rect(self.screen, WHITE, self.panel_rect, border_radius=14)
-        pygame.draw.rect(
-            self.screen,
-            BORDER,
-            self.panel_rect,
-            width=1,
-            border_radius=14,
-        )
-
-        x = self.panel_rect.left + 18
-        inner_width = self.panel_rect.width - 36
-        y = self.panel_rect.top + 18
-        self.screen.blit(
-            self.fonts.title.render("MEOW · Queens 풀이 과정", True, PRIMARY_DARK),
-            (x, y),
-        )
-        y += 38
-
-        badge_text, badge_color, badge_background = self._status_badge()
-        badge_surface = self.fonts.body.render(badge_text, True, badge_color)
-        badge_rect = badge_surface.get_rect(topleft=(x + 9, y + 5)).inflate(18, 10)
-        pygame.draw.rect(
-            self.screen,
-            badge_background,
-            badge_rect,
-            border_radius=8,
-        )
-        self.screen.blit(badge_surface, (badge_rect.left + 9, badge_rect.top + 5))
-        y = badge_rect.bottom + 16
-
-        counter = f"{self.current_step_index + 1} / {len(self.timeline)} 단계"
-        self.screen.blit(self.fonts.heading.render(counter, True, BLACK), (x, y))
-        y += 30
-        y = self._draw_wrapped(
-            self.current_frame.title,
-            x,
-            y,
-            color=PRIMARY,
-            font=self.fonts.heading,
-            max_width=inner_width,
-            max_y=y + 50,
-        )
-
-        if (
-            self.current_frame.kind is TimelineKind.LOGIC_STEP
-            and self.current_frame.active_assumption is not None
-        ):
-            self.screen.blit(
-                self.fonts.body.render(
-                    SOLVER_ALGORITHM_LABELS[SolverAlgorithm.SINGLETON_PROBING],
-                    True,
-                    ORANGE,
-                ),
-                (x, y + 3),
-            )
-            y += 25
-
-        y = self._draw_region_chips(x, y)
-
-        pygame.draw.line(
-            self.screen,
-            LIGHT_GRAY,
-            (x, y + 4),
-            (self.panel_rect.right - 18, y + 4),
-            width=1,
-        )
-        y += 18
-        panel_content_bottom = self.previous_button.rect.top - 42
-        assumption_space = 64 if self.current_frame.active_assumption is not None else 0
-        details_bottom = panel_content_bottom - assumption_space
-
-        self.screen.blit(self.fonts.body.render("사유", True, PRIMARY), (x, y))
-        y += 23
-        y = self._draw_wrapped(
-            self.current_frame.message or self.current_frame.title,
-            x,
-            y,
-            color=GRAY,
-            max_width=inner_width,
-            max_y=details_bottom,
-        )
-
-        effect_groups = self._effect_groups()
-        if effect_groups and y + 30 <= details_bottom:
-            y += 9
-            self.screen.blit(
-                self.fonts.body.render("적용 내역", True, PRIMARY),
-                (x, y),
-            )
-            y += 23
-            for label, items in effect_groups:
-                if self.current_frame.logic_step is None:
-                    if y + 21 > details_bottom:
-                        break
-                    self.screen.blit(
-                        self.fonts.candidate.render(label, True, BLACK),
-                        (x, y),
-                    )
-                    y += 19
-                y = self._draw_effect_items(
-                    items,
-                    x,
-                    y,
-                    max_width=inner_width,
-                    max_y=details_bottom,
-                )
-                y += 5
-
-        if self.current_frame.active_assumption is not None:
-            assumption = _cell_name(self.current_frame.active_assumption)
-            y += 8
-            self.screen.blit(
-                self.fonts.body.render("활성 가정", True, ORANGE),
-                (x, y),
-            )
-            y += 22
-            self.screen.blit(
-                self.fonts.body.render(f"{assumption} = 고양이", True, GRAY),
-                (x, y),
-            )
-
-        mouse_pos = pygame.mouse.get_pos()
-        self.play_button.text = "일시정지" if self.autoplay_enabled else "재생"
-        for button in (
-            self.previous_button,
-            self.play_button,
-            self.next_button,
-            self.edit_button,
-        ):
-            button.update_hover(mouse_pos)
-            button.draw(self.screen)
-
-        help_text = "←/→ 이동 · Home/End · Space 재생 · Esc 편집"
-        help_surface = self.fonts.candidate.render(help_text, True, GRAY)
-        self.screen.blit(
-            help_surface,
-            help_surface.get_rect(
-                center=(self.panel_rect.centerx, self.previous_button.rect.top - 17)
-            ),
-        )
-
-    def _draw_wrapped(
-        self,
-        text: str,
-        x: int,
-        y: int,
-        *,
-        color: Color,
-        max_width: int,
-        max_y: int,
-        font: pygame.font.Font | None = None,
-    ) -> int:
-        selected_font = font or self.fonts.body
-        line_height = selected_font.get_linesize() + 2
-        lines = wrap_text(text, selected_font, max_width)
-        available_lines = max(0, (max_y - y) // line_height)
-        if len(lines) > available_lines:
-            if available_lines == 0:
-                return y
-            lines = (*lines[: available_lines - 1], "…")
-        for line in lines:
-            self.screen.blit(selected_font.render(line, True, color), (x, y))
-            y += line_height
-        return y
-
-    def _draw_effect_items(
-        self,
-        items: tuple[str, ...],
-        x: int,
-        y: int,
-        *,
-        max_width: int,
-        max_y: int,
-    ) -> int:
-        lines = _pack_effect_items(items, self.fonts.body, max_width)
-        line_height = self.fonts.body.get_linesize() + 2
-        available_lines = max(0, (max_y - y) // line_height)
-        if len(lines) > available_lines:
-            if available_lines == 0:
-                return y
-            shown_count = available_lines - 1
-            remaining = len(lines) - shown_count
-            lines = (*lines[:shown_count], f"… 외 {remaining}줄")
-        for line in lines:
-            self.screen.blit(self.fonts.body.render(line, True, GRAY), (x, y))
-            y += line_height
-        return y
-
     def _effect_groups(self) -> tuple[tuple[str, tuple[str, ...]], ...]:
         frame = self.current_frame
         if frame.logic_step is not None:
@@ -646,176 +360,3 @@ class MeowVisualizer:
                 ),
             )
         return ()
-
-    def _navigate(self, offset: int) -> bool:
-        target = max(
-            0,
-            min(len(self.timeline) - 1, self.current_step_index + offset),
-        )
-        if target == self.current_step_index:
-            return False
-        self.current_step_index = target
-        self.autoplay_timer = 0.0
-        return True
-
-    def _set_index(self, index: int) -> None:
-        self.current_step_index = max(0, min(len(self.timeline) - 1, index))
-        self.autoplay_timer = 0.0
-
-    def _toggle_autoplay(self) -> None:
-        self._clear_navigation_holds()
-        if self.current_step_index == len(self.timeline) - 1:
-            self.current_step_index = 0
-        self.autoplay_enabled = not self.autoplay_enabled
-        self.autoplay_timer = 0.0
-
-    def _begin_navigation_hold(
-        self,
-        source: _NavigationSource,
-        offset: int,
-    ) -> None:
-        if source in self._held_navigation_sources:
-            return
-        self.autoplay_enabled = False
-        self._held_navigation_sources[source] = offset
-        self._active_navigation_source = source
-        self._navigation_repeat_timer = 0.0
-        self._navigation_repeat_started = False
-        self._navigate(offset)
-
-    def _end_navigation_hold(self, source: _NavigationSource) -> None:
-        if source not in self._held_navigation_sources:
-            return
-        del self._held_navigation_sources[source]
-        if self._active_navigation_source != source:
-            return
-        self._active_navigation_source = next(
-            reversed(self._held_navigation_sources), None
-        )
-        self._navigation_repeat_timer = 0.0
-        self._navigation_repeat_started = False
-
-    def _clear_navigation_holds(self) -> None:
-        self._held_navigation_sources.clear()
-        self._active_navigation_source = None
-        self._navigation_repeat_timer = 0.0
-        self._navigation_repeat_started = False
-
-    def _update_navigation_hold(self, elapsed: float) -> bool:
-        source = self._active_navigation_source
-        if source is None:
-            return False
-        offset = self._held_navigation_sources.get(source)
-        if offset is None:
-            self._clear_navigation_holds()
-            return False
-
-        changed = False
-        self._navigation_repeat_timer += elapsed
-        threshold = (
-            _NAVIGATION_REPEAT_INTERVAL
-            if self._navigation_repeat_started
-            else _NAVIGATION_REPEAT_DELAY
-        )
-        while self._navigation_repeat_timer >= threshold:
-            self._navigation_repeat_timer -= threshold
-            self._navigation_repeat_started = True
-            changed = self._navigate(offset) or changed
-            threshold = _NAVIGATION_REPEAT_INTERVAL
-        return changed
-
-    def _update_autoplay(self, elapsed: float) -> bool:
-        if not self.autoplay_enabled:
-            return False
-        self.autoplay_timer += elapsed
-        if self.autoplay_timer < _AUTOPLAY_INTERVAL:
-            return False
-        self.autoplay_timer = 0.0
-        changed = self._navigate(1)
-        if not changed:
-            self.autoplay_enabled = False
-        return changed
-
-    def _handle_keydown(self, event: pygame.event.Event) -> str | None:
-        if event.key == pygame.K_ESCAPE:
-            return "edit"
-        if event.key == pygame.K_LEFT:
-            self._begin_navigation_hold(("key", event.key), -1)
-        elif event.key == pygame.K_RIGHT:
-            self._begin_navigation_hold(("key", event.key), 1)
-        elif event.key == pygame.K_HOME:
-            self.autoplay_enabled = False
-            self._set_index(0)
-        elif event.key == pygame.K_END:
-            self.autoplay_enabled = False
-            self._set_index(len(self.timeline) - 1)
-        elif event.key == pygame.K_SPACE:
-            self._toggle_autoplay()
-        return None
-
-    def _handle_mouse_down(self, event: pygame.event.Event) -> str | None:
-        if event.button != 1:
-            return None
-        if self.previous_button.is_clicked(event.pos):
-            self._begin_navigation_hold(("mouse", event.button), -1)
-        elif self.play_button.is_clicked(event.pos):
-            self._toggle_autoplay()
-        elif self.next_button.is_clicked(event.pos):
-            self._begin_navigation_hold(("mouse", event.button), 1)
-        elif self.edit_button.is_clicked(event.pos):
-            return "edit"
-        return None
-
-    def _handle_events(
-        self,
-        events: Iterable[pygame.event.Event],
-    ) -> str | None:
-        for event in events:
-            if event.type == pygame.QUIT:
-                self._clear_navigation_holds()
-                self.running = False
-                return None
-            if event.type == pygame.WINDOWFOCUSLOST:
-                self._clear_navigation_holds()
-            elif event.type == pygame.KEYDOWN:
-                action = self._handle_keydown(event)
-                if action is not None:
-                    return action
-            elif event.type == pygame.KEYUP and event.key in (
-                pygame.K_LEFT,
-                pygame.K_RIGHT,
-            ):
-                self._end_navigation_hold(("key", event.key))
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                action = self._handle_mouse_down(event)
-                if action is not None:
-                    return action
-            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                self._end_navigation_hold(("mouse", event.button))
-        return None
-
-    async def run(self) -> RegionGrid | None:
-        """Run until the user requests editing or closes the application."""
-
-        clock = pygame.time.Clock()
-        self.draw()
-        while self.running:
-            elapsed = await next_frame(clock)
-            timers_were_active = (
-                self.autoplay_enabled or self._active_navigation_source is not None
-            )
-            events = pygame.event.get()
-
-            action = self._handle_events(events)
-            if action == "edit":
-                return self.puzzle.region_grid
-            if not self.running:
-                break
-
-            changed = bool(events)
-            if timers_were_active:
-                changed = self._update_navigation_hold(elapsed) or changed
-                changed = self._update_autoplay(elapsed) or changed
-            if changed:
-                self.draw()
-        return None

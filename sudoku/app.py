@@ -1,8 +1,7 @@
 """Top-level pygame flow for editing, validating, solving, and replaying."""
 
-import pygame
+from puzzle_common.app import run_app
 
-from .board import Grid
 from .input_dialog import SudokuInputDialog
 from .solve_types import SolveStatus
 from .solver import SudokuSolver
@@ -16,32 +15,14 @@ _UNSOLVABLE_MESSAGE = (
 async def main() -> None:
     """Run the application until the user closes either screen."""
 
-    pygame.init()
-    pygame.key.stop_text_input()
-    draft: Grid | None = None
-    input_error: str | None = None
-
-    try:
-        while True:
-            dialog = SudokuInputDialog(
-                initial_board=draft,
-                initial_error=input_error,
-            )
-            puzzle = await dialog.run()
-            if puzzle is None:
-                return
-
-            draft = puzzle.grid
-            result = SudokuSolver(puzzle).solve()
-            if result.status is SolveStatus.UNSOLVABLE:
-                input_error = _UNSOLVABLE_MESSAGE
-                continue
-
-            input_error = None
-            visualizer = SudokuVisualizer(puzzle, result)
-            draft_for_editing = await visualizer.run()
-            if draft_for_editing is None:
-                return
-            draft = draft_for_editing
-    finally:
-        pygame.quit()
+    await run_app(
+        lambda draft, error: SudokuInputDialog(
+            initial_board=draft, initial_error=error
+        ),
+        lambda puzzle: SudokuSolver(puzzle).solve(),
+        SudokuVisualizer,
+        lambda puzzle: puzzle.grid,
+        lambda result: (
+            _UNSOLVABLE_MESSAGE if result.status is SolveStatus.UNSOLVABLE else None
+        ),
+    )

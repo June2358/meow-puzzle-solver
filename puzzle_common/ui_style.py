@@ -103,3 +103,21 @@ def wrap_text(text: str, font: pygame.font.Font, max_width: int) -> tuple[str, .
                 current = candidate
         lines.append(current.rstrip())
     return tuple(lines)
+
+
+def draw_grid_lines(
+    screen: pygame.Surface,
+    origin: tuple[int, int],
+    cell_size: int,
+    size: int,
+    *,
+    color: Color,
+    width: int,
+) -> None:
+    start_x, start_y = origin
+    board_size = size * cell_size
+    for index in range(size + 1):
+        x = start_x + index * cell_size
+        y = start_y + index * cell_size
+        pygame.draw.line(screen, color, (x, start_y), (x, start_y + board_size), width)
+        pygame.draw.line(screen, color, (start_x, y), (start_x + board_size, y), width)

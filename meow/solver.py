@@ -10,6 +10,8 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from itertools import combinations
 
+from puzzle_common.coordinates import cell_name as _cell_name
+
 from .exact_solver import ExactResult, ExactStatus, Solution, verify_exact
 from .logic_solver import solve_logically
 from .model import Cell, Puzzle
@@ -94,10 +96,6 @@ class SolveResult:
     solution: Solution | None
     probing_rounds: tuple[ProbingRound, ...] = ()
     used_backtrack_search: bool = False
-
-
-def _cell_name(cell: Cell) -> str:
-    return f"R{cell[0] + 1}C{cell[1] + 1}"
 
 
 def _solution_from(snapshot: LogicSnapshot) -> Solution:

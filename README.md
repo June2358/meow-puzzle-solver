@@ -1,7 +1,8 @@
 # Puzzle Solvers
 
 MEOW Queens와 Sudoku를 함께 관리하는 pygame-ce 프로젝트입니다.
-각 퍼즐의 규칙과 솔버는 독립적으로 유지하며, 화면·입력·웹 실행 기반은 공유합니다.
+입력 화면, 풀이 재생 화면, 앱 실행 흐름과 웹 빌드를 공유합니다.
+각 퍼즐의 규칙·솔버·입력 계약과 보드 표현은 작은 어댑터로 연결합니다.
 
 ## 개발 환경
 
@@ -36,8 +37,11 @@ Pull request에서도 두 앱의 웹 빌드를 검사하며, 배포는 `main`에
 
 ## 구조
 
-- `meow/`, `sudoku/`: 각 앱의 모델, 입력 검증, 솔버, 보드와 풀이 시각화
-- `puzzle_common/`: 공통 UI, 폰트, 클립보드, 브라우저 입력창, 프레임 처리
+- `meow/`, `sudoku/`: 퍼즐 모델·솔버·검증과 공통 화면에 연결하는 보드/단계 어댑터
+- `puzzle_common/input_dialog.py`: 입력 레이아웃·버튼·프리셋·메시지·JSON/클립보드·이벤트 루프
+- `puzzle_common/playback.py`: 풀이 패널·단계 이동·길게 누르기·자동 재생·이벤트 루프
+- `puzzle_common/app.py`: 시작·편집·풀이·재생·편집 복귀·종료 흐름
+- `puzzle_common/`: 그 외 공통 폰트·그리기·좌표·클립보드·브라우저 입력·프리셋 파일 읽기
 - `main_meow.py`, `main_sudoku.py`: 웹 빌드용 진입점
 - `scripts/build_web.py`: 두 앱을 별도 번들로 빌드하고 선택 페이지 생성
 - `tests/meow/`, `tests/sudoku/`: 기존 앱별 회귀 검사
@@ -45,3 +49,5 @@ Pull request에서도 두 앱의 웹 빌드를 검사하며, 배포는 `main`에
 
 공통 코드를 수정한 뒤에는 전체 검사와 두 앱의 웹 빌드를 함께 실행합니다.
 통합 전 두 프로젝트의 Git 이력은 이 저장소에 보존되어 있습니다.
+
+공통 구현과 퍼즐 어댑터의 책임은 [구조 안내](docs/architecture.md)를 참고하세요.

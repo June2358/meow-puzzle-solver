@@ -2,7 +2,9 @@
 
 import asyncio
 
-from .app import main
+from puzzle_common.app import run_app
+
+from .app import PLUGIN
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(run_app(PLUGIN))

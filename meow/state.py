@@ -209,6 +209,12 @@ class LogicState:
     def snapshot(self) -> LogicSnapshot:
         return LogicSnapshot(self.puzzle, self.status_grid)
 
+    def find_contradiction(self) -> str | None:
+        return self.snapshot().contradiction_message()
+
+    def is_complete(self) -> bool:
+        return self.snapshot().is_solved()
+
     def clone(self) -> LogicState:
         clone = type(self)(self.puzzle)
         clone._statuses = [row[:] for row in self._statuses]

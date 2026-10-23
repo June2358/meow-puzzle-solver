@@ -88,6 +88,9 @@ class SolverState:
             for row in self._candidates
         )
 
+    def snapshot(self) -> tuple[Grid, CandidateGrid]:
+        return self.to_grid(), self.candidate_grid()
+
     def set_value(self, cell: Cell, value: int) -> bool:
         """Assign a candidate value and propagate it to all peers."""
 

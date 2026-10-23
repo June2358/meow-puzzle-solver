@@ -1,6 +1,7 @@
 """One editor/solver/playback lifecycle for every puzzle application."""
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Protocol
 
 import pygame
@@ -16,11 +17,18 @@ class Screen[T](Protocol):
     async def run(self) -> T | None: ...
 
 
+@dataclass(frozen=True, slots=True)
+class PuzzlePlugin[Puzzle, Draft, Frame]:
+    """Register a puzzle's screens, solver and draft using one app contract."""
+
+    create_editor: Callable[[Draft | None, str | None], Screen[Puzzle]]
+    solve: Callable[[Puzzle], PlaybackData[Frame]]
+    create_player: Callable[[Puzzle, PlaybackData[Frame]], Screen[Draft]]
+    get_draft: Callable[[Puzzle], Draft]
+
+
 async def run_app[Puzzle, Draft, Frame](
-    create_editor: Callable[[Draft | None, str | None], Screen[Puzzle]],
-    solve: Callable[[Puzzle], PlaybackData[Frame]],
-    create_player: Callable[[Puzzle, PlaybackData[Frame]], Screen[Draft]],
-    get_draft: Callable[[Puzzle], Draft],
+    plugin: PuzzlePlugin[Puzzle, Draft, Frame],
 ) -> None:
     pygame.init()
     draft: Draft | None = None
@@ -28,15 +36,15 @@ async def run_app[Puzzle, Draft, Frame](
     try:
         pygame.key.stop_text_input()
         while True:
-            puzzle = await create_editor(draft, error).run()
+            puzzle = await plugin.create_editor(draft, error).run()
             if puzzle is None:
                 return
-            draft = get_draft(puzzle)
-            result = solve(puzzle)
+            draft = plugin.get_draft(puzzle)
+            result = plugin.solve(puzzle)
             error = UNSOLVABLE_MESSAGE if result.outcome is Outcome.UNSOLVABLE else None
             if error is not None:
                 continue
-            draft = await create_player(puzzle, result).run()
+            draft = await plugin.create_player(puzzle, result).run()
             if draft is None:
                 return
     finally:

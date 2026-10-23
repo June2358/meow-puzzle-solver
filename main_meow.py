@@ -2,7 +2,8 @@
 
 import asyncio
 
-from meow.app import main
+from meow.app import PLUGIN
+from puzzle_common.app import run_app
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(run_app(PLUGIN))

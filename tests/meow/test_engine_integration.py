@@ -1,8 +1,8 @@
 from meow.logic_solver import solve_logically
 from meow.puzzle_catalog import load_preset
-from meow.solve_types import LogicStatus
-from meow.solver import SolveOutcome, solve
+from meow.solver import solve
 from meow.state import LogicState
+from puzzle_common.engine import LogicStatus
 
 
 def test_public_solve_runs_shared_engine_probing(monkeypatch) -> None:
@@ -23,9 +23,9 @@ def test_public_solve_runs_shared_engine_probing(monkeypatch) -> None:
     assert len(runs) == 1
     assert runs[0].probing_rounds
     assert runs[0].solutions
-    assert result.outcome is SolveOutcome.SOLVED_WITH_PROBING
-    assert result.probing_rounds[0].probes[0].assumption == (0, 2)
-    assert result.solution == tuple(sorted(runs[0].solutions[0].cats))
+    assert result.run.probing_rounds
+    assert result.run.probing_rounds[0].probes[0].assumption == (0, 2)
+    assert result.solution is runs[0].solutions[0]
 
 
 def test_logical_entry_uses_shared_engine_without_mutating_input(monkeypatch) -> None:
@@ -50,6 +50,6 @@ def test_logical_entry_uses_shared_engine_without_mutating_input(monkeypatch) ->
     assert states[0] is not state
     assert state.snapshot() == before
     assert result.initial_state == before
-    assert result.status is LogicStatus.SOLVED_LOGICALLY
+    assert result.status is LogicStatus.SOLVED
     assert len(result.final_state.cats) == 7
     assert result.steps

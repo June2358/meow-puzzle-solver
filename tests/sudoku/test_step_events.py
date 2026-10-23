@@ -1,7 +1,8 @@
 from sample_puzzles import UNIQUE_SOLUTION, grid_from_string
 
+from puzzle_common.engine import LogicStatus, Outcome
+from puzzle_common.presentation import FrameKind, build_frames
 from sudoku.board import Puzzle
-from sudoku.solve_types import SolveStatus, StepKind
 from sudoku.solver import SudokuSolver
 
 REFUTATION_THEN_SOLUTION = (
@@ -11,18 +12,23 @@ REFUTATION_THEN_SOLUTION = (
 
 def test_refutation_removes_the_proven_candidate() -> None:
     result = SudokuSolver(Puzzle(grid_from_string(REFUTATION_THEN_SOLUTION))).solve()
-    refutation = next(step for step in result.steps if step.kind is StepKind.REFUTATION)
+    frames = build_frames(result)
+    refutation = next(frame for frame in frames if frame.kind is FrameKind.REFUTATION)
     contradictions = tuple(
-        step for step in result.steps if step.kind is StepKind.CONTRADICTION
+        frame
+        for frame in frames
+        if frame.kind in (FrameKind.LOGIC_END, FrameKind.PROBE_END)
+        and frame.status is LogicStatus.CONTRADICTION
     )
 
-    assert result.status is SolveStatus.SOLVED_UNIQUE
+    assert result.outcome is Outcome.UNIQUE
     assert contradictions
     assert all(step.contradiction is not None for step in contradictions)
+    assert refutation.active_assumption is None
     assert refutation.assumption is not None
     row, col = refutation.assumption.cell
-    assert refutation.assumption.value not in refutation.candidates[row][col]
-    assert StepKind.SEARCH_FALLBACK not in {step.kind for step in result.steps}
+    assert refutation.assumption.value not in refutation.snapshot[1][row][col]
+    assert FrameKind.SEARCH not in {frame.kind for frame in frames}
 
 
 def test_assumption_solution_is_still_checked_for_a_second_solution() -> None:
@@ -31,12 +37,15 @@ def test_assumption_solution_is_still_checked_for_a_second_solution() -> None:
         grid[row][col] = 0
 
     result = SudokuSolver(Puzzle(grid)).solve()
-    kinds = [step.kind for step in result.steps]
+    frames = build_frames(result)
+    kinds = [frame.kind for frame in frames]
     branch_solution = next(
-        step.grid for step in result.steps if step.kind is StepKind.ASSUMPTION_SOLVED
+        frame.snapshot
+        for frame in frames
+        if frame.kind is FrameKind.PROBE_END and frame.status is LogicStatus.SOLVED
     )
 
-    assert StepKind.ASSUMPTION_SOLVED in kinds
-    assert StepKind.SEARCH_FALLBACK not in kinds
-    assert result.status is SolveStatus.SOLVED_MULTIPLE
-    assert result.solution == branch_solution == result.steps[-1].grid
+    assert FrameKind.PROBE_END in kinds
+    assert FrameKind.SEARCH not in kinds
+    assert result.outcome is Outcome.MULTIPLE
+    assert result.solution == branch_solution == frames[-1].snapshot

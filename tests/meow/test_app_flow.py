@@ -8,7 +8,6 @@ import pytest
 import meow.app as app_module
 import puzzle_common.app as shared_app
 from meow.model import Puzzle
-from meow.presentation import to_playback
 from meow.puzzle_catalog import load_preset
 from meow.solver import solve
 
@@ -41,7 +40,7 @@ def test_solve_once_then_edit_restores_the_same_region_grid(
     class FakeVisualizer:
         def __init__(self, received_puzzle, received_result) -> None:
             assert received_puzzle is puzzle
-            assert received_result == to_playback(solved)
+            assert received_result == solved
 
         async def run(self):
             return puzzle.region_grid
@@ -50,7 +49,7 @@ def test_solve_once_then_edit_restores_the_same_region_grid(
         app_module.PLUGIN,
         create_editor=FakeDialog,
         create_player=FakeVisualizer,
-        solve=lambda received: solve_calls.append(received) or to_playback(solved),
+        solve=lambda received: solve_calls.append(received) or solved,
     )
     asyncio.run(shared_app.run_app(plugin))
 

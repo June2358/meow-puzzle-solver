@@ -1,7 +1,7 @@
 from sample_puzzles import UNIQUE_GRID, UNIQUE_SOLUTION
 
+from puzzle_common.engine import Outcome
 from sudoku.board import Puzzle
-from sudoku.solve_types import SolveStatus
 from sudoku.solver import SudokuSolver
 from sudoku.topology import UNITS
 
@@ -46,9 +46,9 @@ def test_unique_puzzle_returns_the_unique_solution() -> None:
 
     result = SudokuSolver(puzzle).solve()
 
-    assert result.status is SolveStatus.SOLVED_UNIQUE
-    assert result.solution == UNIQUE_SOLUTION
-    assert_valid_solution(result.solution, puzzle)
+    assert result.outcome is Outcome.UNIQUE
+    assert result.solution[0] == UNIQUE_SOLUTION
+    assert_valid_solution(result.solution[0], puzzle)
 
 
 def test_multiple_puzzle_returns_a_valid_representative() -> None:
@@ -56,8 +56,8 @@ def test_multiple_puzzle_returns_a_valid_representative() -> None:
 
     result = SudokuSolver(puzzle).solve()
 
-    assert result.status is SolveStatus.SOLVED_MULTIPLE
-    assert_valid_solution(result.solution, puzzle)
+    assert result.outcome is Outcome.MULTIPLE
+    assert_valid_solution(result.solution[0], puzzle)
 
 
 def test_consistent_but_impossible_givens_are_unsolvable() -> None:
@@ -65,5 +65,5 @@ def test_consistent_but_impossible_givens_are_unsolvable() -> None:
 
     result = SudokuSolver(puzzle).solve()
 
-    assert result.status is SolveStatus.UNSOLVABLE
+    assert result.outcome is Outcome.UNSOLVABLE
     assert result.solution is None

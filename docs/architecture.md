@@ -7,7 +7,8 @@
 | --- | --- | --- |
 | `puzzle_common.engine.Engine` | 논리 고정점, 순차 한 단계 가정, 반증·재추론, 상한이 있는 조용한 DFS, 공통 실행 기록 | 같은 State 계약, 기법/적용/순위/이력/가정/반증/MRV/해 동등성 규칙 |
 | `puzzle_common.app.run_app` | pygame 수명주기, 편집 → 풀이 → 재생 → 편집 반복, 해 없음의 편집 복귀, 종료 정리 | `PuzzlePlugin` 하나에 편집기/재생기, 정규화된 solve, 초안 추출 등록 |
-| `puzzle_common.presentation.PlaybackData` | 공통 해 분류와 비어 있지 않은 불변 단계 목록 | `meow.presentation.to_playback`, `sudoku.presentation.to_playback`이 기존 결과를 변환 |
+| `puzzle_common.engine.SolveResult` | 검증된 Outcome과 원본 SolveRun을 화면까지 같은 객체로 전달 | MEOW 독립 exact 판정 또는 Sudoku 해2개 확인으로 분류 |
+| `puzzle_common.presentation.build_frames` | 하나의 FrameKind/PlaybackFrame과 일정한 단계 생성 | 각 퍼즐의 describe_frame과 보드 렌더링 |
 | `puzzle_common.layout` | 입력/재생 창·보드·패널의 배치, `cell_rect`/`cell_at` 셀 좌표와 히트 검사 | 실제 격자 크기 |
 | `puzzle_common.constraints.locked_candidate_targets` | 후보가 한 단위에 모였을 때 원본 단위 밖에서 제거할 칸 선택 | 단위/후보/가능 칸 판정, 기법 순서, 최소 근거 수와 설명 |
 | `puzzle_common.input_dialog.InputDialog` | 레이아웃, 버튼, 프리셋 조작, 메시지/사용법, JSON/프롬프트/클립보드, 모달 정리, 이벤트 루프 | 제목/설명/프롬프트, 보드 상태와 편집 규칙, 파서/검증, 보드 그리기 |
@@ -25,8 +26,9 @@ flowchart LR
     E --> L[논리 고정점]
     L --> P[순차 가정·반증·재추론]
     P --> D[필요한 해 수까지 DFS]
-    D --> R[공통 SolveRun]
-    R --> V[퍼즐 설명 변환 → 공통 재생 화면]
+    D --> R[공통 SolveResult·SolveRun]
+    R --> F[단일 build_frames]
+    F --> V[고유 설명·보드 → 공통 재생 화면]
 ```
 
 `EngineState` 계약은 `clone()`, `snapshot()`, `find_contradiction()`,
@@ -50,7 +52,8 @@ flowchart LR
 확인한다. 가정 상태는 clone이며, 조용한 DFS는 화면 기록과 가정 순위 이력을 만들지 않는다.
 
 실행 기록은 `LogicStep → LogicRun → ProbeRun/ProbeRound → SolveRun`으로 일정하다.
-기존 MEOW LogicResult/타임라인과 Sudoku SolveStep은 이 공통 기록에서 설명을 변환한다.
+양쪽 솔버는 `SolveResult(outcome, run)`을 반환하고 앱과 재생 화면은 같은 객체를 받는다.
+퍼즐별 옛 LogicResult/SolveStep과 결과 상태 enum, 다시 만드는 변환 함수는 없다.
 MEOW의 독립 exact 검증은 유지하고 엔진에는 해 상한1을 전달한다. Sudoku는 상한2를
 전달하며 가정에서 발견한 해를 첫 해로 보존한 채 중복 없이 두 번째 해를 확인한다.
 
@@ -78,16 +81,29 @@ MEOW의 독립 exact 검증은 유지하고 엔진에는 해 상한1을 전달�
 
 ## 풀이 재생
 
-`MeowVisualizer`, `SudokuVisualizer`는 공통 `PlaybackScreen`을 상속한다.
-알고리즘 결과의 자료형은 각자 유지한다. UI에 전달하기 전에 `to_playback()`이
-`PlaybackData(outcome, frames)`로 변환한다. 해 분류는 `UNIQUE`, `MULTIPLE`,
-`UNSOLVABLE`로 통일한다. Sudoku는 기존 steps tuple을 그대로 쓰고, MEOW는
-기존 build_timeline의 결과를 사용한다. 보드 상태와 추론 근거를 다른 자료형으로 복제하지 않는다.
+`MeowVisualizer`, `SudokuVisualizer`는 공통 `PlaybackScreen`을 상속하고 솔버가 반환한
+`SolveResult`를 직접 받는다. 해 분류는 공통 `Outcome.UNIQUE/MULTIPLE/UNSOLVABLE`이다.
+별도 PlaybackData/to_playback이나 MEOW 전용 timeline은 없다.
 
-`PlaybackScreen[Draft, Frame]`이 현재 단계를 한 번 읽어 `_draw_board(frame)`과
-`_presentation(frame)`에 같은 객체로 전달한다. 후자는 제목·사유·적용 내역·활성 가정·
-관련 영역 색상을 `PlaybackDetails`로 변환한다. 해 분류 배지는 공통 화면이 표시한다.
-Visualizers는 원본 SolveResult 대신 각 퍼즐의 typed frame을 담은 PlaybackData를 받는다.
+공통 화면이 `build_frames(result)`를 한 번 호출해 불변 `PlaybackFrame` tuple을 만든다.
+프레임은 원본 snapshot/deduction/assumption/contradiction을 참조한다. 같은 현재 프레임이
+`_draw_board(frame)`과 `_presentation(frame)`에 전달되고, 퍼즐별 `describe_frame(frame,result)`는
+이 한 단계의 제목·사유·적용 내역·활성 가정·관련 색상만 `PlaybackDetails`로 설명한다.
+퍼즐별 presenter는 실행 기록을 다시 순회하거나 단계 목록을 만들지 않는다.
+
+단계 순서는 양쪽 모두 START → 추론 → LOGIC_END → 후보 선택 → 가정 시작/추론/종료 →
+실패한 가정 복원 → 반증/재추론/LOGIC_END → 필요한 경우 SEARCH → FINAL이다.
+Sudoku가 이전에 생략하던 선택/복원/종료와 MEOW 반증 후 종료 단계가 추가된다.
+실제 추론·가정 순서와 기존 설명/픽셀은 유지한다. 프레임 수 변화는 탐색량 증가가 아니다.
+
+RESTORE/REFUTATION은 가정의 결정값을 보존하되 `active_assumption`은 None이다.
+Sudoku 반증은 빨간 강조만 유지하며 주황 숫자·테두리·활성 배지를 표시하지 않는다.
+복원 단계에는 실패한 가정의 강조를 남기지 않는다. SEARCH와 해 없음의 FINAL은 버린
+가정의 스냅샷이 아닌 `result.root_state`를 사용한다.
+
+공통 화면은 창 구성 전에 `_validate_frames()`로 원본 스냅샷을 검사한다. 같은 프레임형을
+사용하더라도 다른 퍼즐의 payload는 거부한다. MEOW는 모든 단계의 영역 소속, Sudoku는
+원본 스냅샷 구조·데이터 타입과 초기 보드 소속을 확인한다.
 
 해가 없으면 두 앱 모두 원본 초안을 보존해 편집 화면으로 복귀한다.
 공통 메시지는 `현재 입력으로 가능한 해가 없습니다. 원본 문제와 입력을 확인하세요.`이다.

@@ -2,9 +2,9 @@
 
 import pygame
 
-from puzzle_common.coordinates import cell_name as _cell_name
+from puzzle_common.engine import SolveResult
 from puzzle_common.playback import PlaybackDetails, PlaybackScreen
-from puzzle_common.presentation import PlaybackData
+from puzzle_common.presentation import FrameKind, PlaybackFrame
 from puzzle_common.ui_style import (
     ACCENT,
     ACCENT_YELLOW,
@@ -18,10 +18,11 @@ from puzzle_common.ui_style import (
 )
 
 from .board import Grid, Puzzle
+from .engine_adapter import SudokuSnapshot
+from .presentation import describe_frame
 from .solve_types import (
-    SolveStep,
-    StepKind,
-    Technique,
+    Assignment,
+    ContradictionWitness,
     TechniqueResult,
 )
 from .topology import SIZE, UNITS
@@ -30,109 +31,77 @@ from .ui_style import (
     get_fonts,
 )
 
-_STEP_LABELS: dict[StepKind, str] = {
-    StepKind.INITIAL_STATE: "초기 상태",
-    StepKind.TECHNIQUE: "논리 기법",
-    StepKind.ASSUMPTION: "한 단계 가정",
-    StepKind.ASSUMPTION_STALLED: "가정 정체",
-    StepKind.ASSUMPTION_SOLVED: "가정에서 해 발견",
-    StepKind.CONTRADICTION: "모순",
-    StepKind.REFUTATION: "귀류 결론",
-    StepKind.SEARCH_FALLBACK: "백트래킹 전환",
-    StepKind.SOLVED: "풀이 완료",
-    StepKind.UNSOLVABLE: "해 없음",
-}
 
-_TECHNIQUE_LABELS: dict[Technique, str] = {
-    Technique.FULL_HOUSE: "Full House",
-    Technique.NAKED_SINGLE: "Naked Single",
-    Technique.HIDDEN_SINGLE: "Hidden Single",
-    Technique.LOCKED_PAIR: "Locked Pair",
-    Technique.NAKED_PAIR: "Naked Pair",
-    Technique.LOCKED_CANDIDATES_POINTING: "Locked Candidates — Pointing",
-    Technique.LOCKED_CANDIDATES_CLAIMING: "Locked Candidates — Claiming",
-    Technique.LOCKED_TRIPLE: "Locked Triple",
-    Technique.NAKED_TRIPLE: "Naked Triple",
-    Technique.HIDDEN_PAIR: "Hidden Pair",
-    Technique.HIDDEN_TRIPLE: "Hidden Triple",
-    Technique.REFUTATION: "귀류법",
-}
-
-
-def _deduction_effect_groups(
-    deduction: TechniqueResult,
-) -> tuple[tuple[str, tuple[str, ...]], ...]:
-    """Return labeled, atomic effect items from structured deduction data."""
-
-    groups: list[tuple[str, tuple[str, ...]]] = []
-    if deduction.assignments:
-        items = tuple(
-            dict.fromkeys(
-                f"{_cell_name(item.cell)} = {item.value}"
-                for item in deduction.assignments
-            )
-        )
-        groups.append((f"확정 칸 · {len(items)}", items))
-    if deduction.eliminations:
-        items = tuple(
-            dict.fromkeys(
-                f"{_cell_name(item.cell)}: {', '.join(map(str, sorted(item.values)))}"
-                for item in deduction.eliminations
-            )
-        )
-        groups.append((f"후보 제거 · {len(items)}", items))
-    return tuple(groups)
-
-
-def _deduction_reason(step: SolveStep) -> str:
-    """Return producer-supplied reason prose; effects live in structured fields."""
-
-    deduction = step.deduction
-    if deduction is None:
-        return step.message
-    return deduction.explanation or step.message
-
-
-def _technique_label(step: SolveStep) -> str:
-    """Return the technique label, including the final Full House special case."""
-
-    deduction = step.deduction
-    if deduction is None:
-        raise ValueError("논리 기법 라벨에는 deduction이 필요합니다.")
-    if (
-        deduction.technique is Technique.FULL_HOUSE
-        and len(deduction.assignments) == 1
-        and all(value != 0 for row in step.grid for value in row)
-    ):
-        return "Last Digit"
-    return _TECHNIQUE_LABELS[deduction.technique]
-
-
-class SudokuVisualizer(PlaybackScreen[Grid, SolveStep]):
+class SudokuVisualizer(
+    PlaybackScreen[
+        Grid, SudokuSnapshot, TechniqueResult, Assignment, ContradictionWitness
+    ]
+):
     """Interpret Sudoku trace steps and render values, candidates and evidence."""
 
-    def __init__(self, puzzle: Puzzle, data: PlaybackData[SolveStep]) -> None:
+    def __init__(self, puzzle: Puzzle, result: SolveResult) -> None:
         if not isinstance(puzzle, Puzzle):
             raise TypeError("SudokuVisualizer는 Puzzle을 받아야 합니다.")
-        if not isinstance(data, PlaybackData) or any(
-            not isinstance(frame, SolveStep) for frame in data.frames
-        ):
-            raise TypeError(
-                "SudokuVisualizer는 PlaybackData[SolveStep]을 받아야 합니다."
-            )
-        if data.frames[0].grid != puzzle.grid:
-            raise ValueError("풀이 결과가 전달된 문제에서 생성되지 않았습니다.")
-
         self.puzzle = puzzle
         super().__init__(
-            data=data,
+            result=result,
             edit_draft=puzzle.grid,
             board_size=SIZE,
             caption="스도쿠 풀이 과정",
             fonts=get_fonts(),
         )
 
-    def _draw_board(self, frame: SolveStep) -> None:
+    def _validate_frames(self) -> None:
+        for frame in self.frames:
+            snapshot = frame.snapshot
+            if (
+                not isinstance(snapshot, tuple)
+                or len(snapshot) != 2
+                or any(
+                    not isinstance(board, tuple)
+                    or len(board) != SIZE
+                    or any(
+                        not isinstance(row, tuple) or len(row) != SIZE for row in board
+                    )
+                    for board in snapshot
+                )
+            ):
+                raise TypeError(
+                    "SudokuVisualizer에는 스도쿠 grid/candidates가 필요합니다."
+                )
+            grid, candidates = snapshot
+            if any(
+                type(value) is not int or not 0 <= value <= SIZE
+                for row in grid
+                for value in row
+            ):
+                raise TypeError("스도쿠 grid는 0~9 정수로 구성되어야 합니다.")
+            if any(
+                not isinstance(values, frozenset)
+                or any(
+                    type(value) is not int or not 1 <= value <= SIZE for value in values
+                )
+                for row in candidates
+                for values in row
+            ):
+                raise TypeError("스도쿠 후보는 1~9 정수의 frozenset이어야 합니다.")
+            if (
+                frame.deduction is not None
+                and not isinstance(frame.deduction, TechniqueResult)
+                or frame.contradiction is not None
+                and not isinstance(frame.contradiction, ContradictionWitness)
+                or frame.assumption is not None
+                and not isinstance(frame.assumption, Assignment)
+                or any(
+                    not isinstance(decision, Assignment)
+                    for decision in frame.candidates
+                )
+            ):
+                raise TypeError("SudokuVisualizer에는 스도쿠 추론과 가정이 필요합니다.")
+        if self.frames[0].snapshot[0] != self.puzzle.grid:
+            raise ValueError("풀이 결과가 전달된 문제에서 생성되지 않았습니다.")
+
+    def _draw_board(self, frame: PlaybackFrame) -> None:
         pygame.draw.rect(self.screen, WHITE, self.board_rect)
         self._draw_cell_highlights(frame)
         draw_sudoku_grid_lines(
@@ -142,25 +111,10 @@ class SudokuVisualizer(PlaybackScreen[Grid, SolveStep]):
         )
         self._draw_values_and_candidates(frame)
 
-    def _presentation(self, step: SolveStep) -> PlaybackDetails:
-        annotations = []
-        if step.deduction is not None:
-            annotations.append((_technique_label(step), ACCENT))
-        if step.depth:
-            annotations.append(("한 단계 가정 중", ORANGE))
-        return PlaybackDetails(
-            title=_STEP_LABELS[step.kind],
-            reason=_deduction_reason(step),
-            effects=_deduction_effect_groups(step.deduction)
-            if step.deduction is not None
-            else (),
-            annotations=tuple(annotations),
-            assumption=f"{_cell_name(step.assumption.cell)} = {step.assumption.value}"
-            if step.depth and step.assumption is not None
-            else "",
-        )
+    def _presentation(self, frame: PlaybackFrame) -> PlaybackDetails:
+        return describe_frame(frame, self.result)
 
-    def _draw_cell_highlights(self, step: SolveStep) -> None:
+    def _draw_cell_highlights(self, step: PlaybackFrame) -> None:
         deduction = step.deduction
         context = set(deduction.context_cells if deduction else ())
         evidence = set(deduction.evidence_cells if deduction else ())
@@ -189,16 +143,16 @@ class SudokuVisualizer(PlaybackScreen[Grid, SolveStep]):
         for cell in contradiction_cells:
             self._fill_cell(cell, (*RED, 80))
 
-        if step.assumption is not None:
-            decision_color = RED if step.kind is StepKind.REFUTATION else ORANGE
+        if step.active_assumption is not None or step.kind is FrameKind.REFUTATION:
+            decision_color = RED if step.kind is FrameKind.REFUTATION else ORANGE
             self._fill_cell(step.assumption.cell, (*decision_color, 80))
-            if step.depth:
+            if step.active_assumption is not None:
                 self._outline_cell(step.assumption.cell, ORANGE, width=3)
 
-    def _draw_values_and_candidates(self, step: SolveStep) -> None:
+    def _draw_values_and_candidates(self, step: PlaybackFrame) -> None:
         assumption_cells = (
             {step.assumption.cell}
-            if step.depth and step.assumption is not None
+            if step.active_assumption is not None and step.assumption is not None
             else set()
         )
         removed_by_cell = {
@@ -208,7 +162,7 @@ class SudokuVisualizer(PlaybackScreen[Grid, SolveStep]):
 
         for row in range(SIZE):
             for col in range(SIZE):
-                value = step.grid[row][col]
+                value = step.snapshot[0][row][col]
                 center = self.layout.cell_rect((row, col)).center
                 if value:
                     if (row, col) in self.puzzle.givens:
@@ -221,7 +175,7 @@ class SudokuVisualizer(PlaybackScreen[Grid, SolveStep]):
                     self.screen.blit(rendered, rendered.get_rect(center=center))
                     continue
 
-                candidates = step.candidates[row][col]
+                candidates = step.snapshot[1][row][col]
                 removed = removed_by_cell.get((row, col), frozenset())
                 self._draw_candidate_marks(row, col, candidates, removed)
 

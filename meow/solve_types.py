@@ -1,7 +1,7 @@
 """결정적 추론 솔버가 공유하는 불변 값 객체.
 
 기법 finder는 :class:`Deduction`만 만들고 상태를 바꾸지 않는다. 실제 적용과
-단계 기록은 ``logic_solver``가 담당한다. 이 분리 덕분에 각 추론의 근거와
+단계 기록은 공용 엔진이 담당한다. 이 분리 덕분에 각 추론의 근거와
 효과를 독립적으로 검사할 수 있다.
 """
 
@@ -9,20 +9,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Final
+from typing import Final
 
 from .model import Cell
-
-if TYPE_CHECKING:
-    from .state import LogicSnapshot
-
-
-class LogicStatus(StrEnum):
-    """논리 풀이의 가능한 종료 상태."""
-
-    SOLVED_LOGICALLY = "SOLVED_LOGICALLY"
-    STALLED = "STALLED"
-    CONTRADICTION = "CONTRADICTION"
 
 
 class UnitKind(StrEnum):
@@ -147,28 +136,3 @@ class Deduction:
         """이 세부 추론을 만든 상위 알고리즘을 반환한다."""
 
         return TECHNIQUE_ALGORITHMS[self.technique]
-
-
-@dataclass(frozen=True, slots=True)
-class LogicStep:
-    """추론 적용 전후의 상태를 함께 보존하는 한 단계."""
-
-    number: int
-    deduction: Deduction
-    before: LogicSnapshot
-    after: LogicSnapshot
-
-    def __post_init__(self) -> None:
-        if self.number < 1:
-            raise ValueError("단계 번호는 1부터 시작해야 합니다.")
-
-
-@dataclass(frozen=True, slots=True)
-class LogicResult:
-    """정답 탐색을 섞지 않은 논리 풀이 결과와 전체 trace."""
-
-    status: LogicStatus
-    initial_state: LogicSnapshot
-    final_state: LogicSnapshot
-    steps: tuple[LogicStep, ...]
-    message: str = ""

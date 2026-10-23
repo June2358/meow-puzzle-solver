@@ -37,13 +37,14 @@ Pull request에서도 두 앱의 웹 빌드를 검사하며, 배포는 `main`에
 
 ## 구조
 
-- `puzzle_common/engine.py`: 논리 고정점·가정·반증 재시작·상한 DFS와 불변 실행 기록
+- `puzzle_common/engine.py`: 논리 고정점·가정·반증 재시작·상한 DFS, 불변 실행 기록과 공통 SolveResult
 - `meow/engine_adapter.py`, `sudoku/engine_adapter.py`: 같은 계약에 고유 기법·점수·가정/반증·MRV 규칙 제공
 - `meow/`, `sudoku/`: 퍼즐 모델·고유 검증과 공통 결과의 설명/보드 어댑터
 - `puzzle_common/input_dialog.py`: 입력 레이아웃·버튼·프리셋·메시지·JSON/클립보드·이벤트 루프
 - `puzzle_common/playback.py`: 풀이 패널·단계 이동·길게 누르기·자동 재생·이벤트 루프
 - `puzzle_common/app.py`, 각 앱의 `app.py`: `PuzzlePlugin` 등록과 하나의 시작·편집·풀이·재생·종료 흐름
-- `puzzle_common/presentation.py`, 각 앱의 `presentation.py`: 공통 해 분류·단계 목록과 기존 솔버 결과의 연결
+- `puzzle_common/presentation.py`: 원본 결과를 같은 FrameKind/PlaybackFrame 단계로 한 번 생성
+- 각 앱의 `presentation.py`: 같은 한 단계에 대한 고유 문구·효과·설명만 제공
 - `puzzle_common/layout.py`: 양쪽 입력/재생의 같은 창·보드·패널 배치
 - `puzzle_common/`: 그 외 공통 폰트·그리기·좌표·클립보드·브라우저 입력·프리셋 파일 읽기
 - `main_meow.py`, `main_sudoku.py`: 웹 빌드용 진입점
@@ -58,3 +59,6 @@ Pull request에서도 두 앱의 웹 빌드를 검사하며, 배포는 `main`에
 
 양쪽 앱은 방향키·Tab 이동, 결과 배지와 해 없음의 편집 복귀 방식을 공유합니다.
 알고리즘·퍼즐별 입력 규칙·숫자/후보 또는 고양이/색상 표현은 유지합니다.
+
+두 솔버의 결과는 공통 `SolveResult(outcome, run)`이며 화면까지 같은 객체로 전달합니다.
+재생은 가정 후보 선택·종료·복원을 같은 순서로 표시합니다.

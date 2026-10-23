@@ -1,8 +1,10 @@
 import pytest
 
+from puzzle_common.engine import LogicStatus, Outcome
+from puzzle_common.presentation import FrameKind, build_frames
 from sudoku.board import Puzzle
 from sudoku.puzzle_catalog import load_puzzle_catalog
-from sudoku.solve_types import SolveStatus, StepKind, Technique
+from sudoku.solve_types import Technique
 from sudoku.solver import SudokuSolver
 
 EXPECTED_DIFFICULTIES = (
@@ -27,26 +29,27 @@ def test_catalog_has_the_six_display_names() -> None:
         ("쉬움", Technique.NAKED_SINGLE, None),
         ("보통", Technique.LOCKED_PAIR, None),
         ("어려움", Technique.HIDDEN_TRIPLE, None),
-        ("전문가", Technique.REFUTATION, StepKind.REFUTATION),
-        ("마스터", Technique.REFUTATION, StepKind.REFUTATION),
-        ("극한", None, StepKind.SEARCH_FALLBACK),
+        ("전문가", Technique.REFUTATION, FrameKind.REFUTATION),
+        ("마스터", Technique.REFUTATION, FrameKind.REFUTATION),
+        ("극한", None, FrameKind.SEARCH),
     ],
 )
 def test_builtin_puzzle_keeps_its_advertised_trace_role(
     difficulty: str,
     required_technique: Technique | None,
-    required_kind: StepKind | None,
+    required_kind: FrameKind | None,
 ) -> None:
     puzzle = Puzzle(load_puzzle_catalog()[difficulty])
 
     result = SudokuSolver(puzzle).solve()
-    assert result.status is SolveStatus.SOLVED_UNIQUE
+    assert result.outcome is Outcome.UNIQUE
     assert result.solution is not None
 
+    frames = build_frames(result)
     techniques = {
-        step.deduction.technique for step in result.steps if step.deduction is not None
+        step.deduction.technique for step in frames if step.deduction is not None
     }
-    kinds = {step.kind for step in result.steps}
+    kinds = {step.kind for step in frames}
 
     if required_technique is not None:
         assert required_technique in techniques
@@ -59,22 +62,24 @@ def test_builtin_puzzle_keeps_its_advertised_trace_role(
             Technique.HIDDEN_SINGLE,
         }
     if difficulty in {"쉬움", "보통", "어려움"}:
-        assert StepKind.ASSUMPTION not in kinds
-        assert StepKind.SEARCH_FALLBACK not in kinds
+        assert FrameKind.PROBE_START not in kinds
+        assert FrameKind.SEARCH not in kinds
     if difficulty == "전문가":
-        assert sum(step.kind is StepKind.REFUTATION for step in result.steps) == 1
-        assert StepKind.SEARCH_FALLBACK not in kinds
+        assert sum(step.kind is FrameKind.REFUTATION for step in frames) == 1
+        assert FrameKind.SEARCH not in kinds
     if difficulty == "마스터":
-        assert sum(step.kind is StepKind.REFUTATION for step in result.steps) >= 2
-        assert StepKind.SEARCH_FALLBACK not in kinds
+        assert sum(step.kind is FrameKind.REFUTATION for step in frames) >= 2
+        assert FrameKind.SEARCH not in kinds
     if difficulty == "극한":
-        assumption_count = sum(
-            step.kind is StepKind.ASSUMPTION for step in result.steps
-        )
+        assumption_count = sum(step.kind is FrameKind.PROBE_START for step in frames)
         assert assumption_count > 0
         assert assumption_count == sum(
-            step.kind is StepKind.ASSUMPTION_STALLED for step in result.steps
+            step.kind is FrameKind.PROBE_END and step.status is LogicStatus.STALLED
+            for step in frames
         )
-        assert StepKind.REFUTATION not in kinds
-        assert StepKind.ASSUMPTION_SOLVED not in kinds
-        assert max(step.depth for step in result.steps) == 1
+        assert FrameKind.REFUTATION not in kinds
+        assert not any(
+            step.kind is FrameKind.PROBE_END and step.status is LogicStatus.SOLVED
+            for step in frames
+        )
+        assert any(step.active_assumption is not None for step in frames)

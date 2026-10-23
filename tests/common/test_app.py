@@ -5,7 +5,22 @@ import pygame
 import pytest
 
 from puzzle_common.app import PuzzlePlugin
-from puzzle_common.presentation import Outcome, PlaybackData
+from puzzle_common.engine import LogicRun, LogicStatus, Outcome, SolveResult, SolveRun
+
+
+def result_with(outcome):
+    snapshot = object()
+    solvable = outcome is not Outcome.UNSOLVABLE
+    logic = LogicRun(
+        LogicStatus.SOLVED if solvable else LogicStatus.CONTRADICTION,
+        snapshot,
+        snapshot,
+        (),
+        None if solvable else "no solution",
+    )
+    return SolveResult(
+        outcome, SolveRun(logic, (), (snapshot,) if solvable else (), False)
+    )
 
 
 def screen(value):
@@ -29,7 +44,7 @@ def test_shared_flow_reopens_editor_with_the_returned_draft(lifecycle, outcome):
     from puzzle_common.app import run_app
 
     puzzle, draft, edited = object(), object(), object()
-    result = PlaybackData(outcome, (object(),))
+    result = result_with(outcome)
     inputs = iter((puzzle, None))
     edits = []
 
@@ -55,7 +70,7 @@ def test_shared_flow_keeps_draft_and_error_when_result_cannot_be_shown(lifecycle
     from puzzle_common.app import run_app
 
     puzzle, draft = object(), object()
-    result = PlaybackData(Outcome.UNSOLVABLE, (object(),))
+    result = result_with(Outcome.UNSOLVABLE)
     inputs = iter((puzzle, None))
     edits = []
 
@@ -106,7 +121,7 @@ def test_shared_flow_quits_if_a_registered_stage_raises(lifecycle, stage):
 
     plugin = PuzzlePlugin(
         lambda *_: screen(object()),
-        lambda _: PlaybackData(Outcome.UNIQUE, (object(),)),
+        lambda _: result_with(Outcome.UNIQUE),
         lambda *_: screen(None),
         lambda _: object(),
     )

@@ -5,6 +5,7 @@ import pygame
 import pytest
 
 from puzzle_common.app import PuzzlePlugin, run_app
+from puzzle_common.engine import SolveResult
 
 
 @pytest.fixture(params=["meow", "sudoku"])
@@ -29,8 +30,14 @@ def test_registered_puzzles_use_the_same_flow_and_preserve_the_draft(
     plugin, puzzle = plugin_case
     assert isinstance(plugin, PuzzlePlugin)
     expected = plugin.solve(puzzle)
+    assert isinstance(expected, SolveResult)
     inputs = iter((puzzle, None))
-    drafts, received, lifecycle = [], [], []
+    drafts, received, lifecycle, solved = [], [], [], []
+
+    def solve(puzzle_arg):
+        result = plugin.solve(puzzle_arg)
+        solved.append(result)
+        return result
 
     class Editor:
         def __init__(self, draft, error):
@@ -49,8 +56,13 @@ def test_registered_puzzles_use_the_same_flow_and_preserve_the_draft(
     monkeypatch.setattr(pygame, "init", lambda: lifecycle.append("init"))
     monkeypatch.setattr(pygame, "quit", lambda: lifecycle.append("quit"))
     monkeypatch.setattr(pygame.key, "stop_text_input", lambda: None)
-    asyncio.run(run_app(replace(plugin, create_editor=Editor, create_player=Player)))
+    asyncio.run(
+        run_app(
+            replace(plugin, create_editor=Editor, create_player=Player, solve=solve)
+        )
+    )
 
     assert drafts == [(None, None), (plugin.get_draft(puzzle), None)]
     assert received == [(puzzle, expected)]
+    assert received[0][1] is solved[0]
     assert lifecycle == ["init", "quit"]

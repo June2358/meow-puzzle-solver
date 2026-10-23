@@ -3,8 +3,8 @@ import pytest
 from meow.logic_solver import solve_logically
 from meow.model import Puzzle
 from meow.puzzle_catalog import load_preset
-from meow.solve_types import LogicStatus
 from meow.state import CellState, LogicSnapshot, LogicState
+from puzzle_common.engine import LogicStatus
 
 
 def _puzzle(*rows: str) -> Puzzle:
@@ -14,7 +14,7 @@ def _puzzle(*rows: str) -> Puzzle:
 def test_deterministic_logic_solves_a_known_puzzle() -> None:
     result = solve_logically(load_preset("보통"))
 
-    assert result.status is LogicStatus.SOLVED_LOGICALLY
+    assert result.status is LogicStatus.SOLVED
     assert result.final_state.cats == frozenset(
         {
             (0, 0),
@@ -41,7 +41,7 @@ def test_deterministic_logic_reports_a_contradiction() -> None:
 
     assert result.status is LogicStatus.CONTRADICTION
     assert result.final_state.has_contradiction()
-    assert result.message
+    assert result.contradiction
 
 
 @pytest.mark.parametrize(
@@ -93,5 +93,5 @@ def test_snapshot_and_logic_use_the_same_first_contradiction(
     if message is not None:
         result = solve_logically(puzzle, LogicState.from_snapshot(snapshot))
         assert result.status is LogicStatus.CONTRADICTION
-        assert result.message == message
+        assert result.contradiction == message
         assert result.steps == ()

@@ -5,14 +5,14 @@ from dataclasses import replace
 
 import pygame
 import pytest
-from sample_puzzles import UNIQUE_GRID
+from sample_puzzles import UNIQUE_GRID, UNIQUE_SOLUTION
 
-from meow.presentation import to_playback as meow_playback
+from meow.model import Puzzle as MeowPuzzle
 from meow.puzzle_catalog import PRESET_NAMES, load_preset
 from meow.solver import solve
 from meow.visualizer import MeowVisualizer
+from puzzle_common.engine import Outcome
 from puzzle_common.playback import PlaybackScreen
-from puzzle_common.presentation import Outcome, PlaybackData
 from puzzle_common.ui_style import (
     ACCENT,
     ACCENT_LIGHT,
@@ -22,7 +22,6 @@ from puzzle_common.ui_style import (
     RED_LIGHT,
 )
 from sudoku.board import Puzzle
-from sudoku.presentation import to_playback as sudoku_playback
 from sudoku.puzzle_catalog import load_puzzle_catalog
 from sudoku.solver import SudokuSolver
 from sudoku.visualizer import SudokuVisualizer
@@ -33,12 +32,10 @@ def playback(request):
     pygame.init()
     if request.param == "regions":
         puzzle = load_preset("쉬움")
-        visualizer = MeowVisualizer(puzzle, meow_playback(solve(puzzle)))
+        visualizer = MeowVisualizer(puzzle, solve(puzzle))
     else:
         puzzle = Puzzle(UNIQUE_GRID)
-        visualizer = SudokuVisualizer(
-            puzzle, sudoku_playback(SudokuSolver(puzzle).solve())
-        )
+        visualizer = SudokuVisualizer(puzzle, SudokuSolver(puzzle).solve())
     yield visualizer
     pygame.display.quit()
 
@@ -54,11 +51,11 @@ def test_both_playbacks_share_board_and_panel_layout(playback):
 
 
 def test_playback_keeps_normalized_data_and_exact_frames(playback):
-    assert playback.frames is playback.data.frames
+    assert isinstance(playback.frames, tuple)
     assert playback.current_frame is playback.frames[0]
-    assert playback.frame_count == len(playback.data.frames)
-    assert playback.outcome is playback.data.outcome
-    assert not hasattr(playback, "result")
+    assert playback.frame_count == len(playback.frames)
+    assert playback.outcome is playback.result.outcome
+    assert not hasattr(playback, "data")
 
 
 @pytest.mark.parametrize(
@@ -70,19 +67,49 @@ def test_playback_keeps_normalized_data_and_exact_frames(playback):
     ),
 )
 def test_common_outcome_badges_render_for_both_puzzles(playback, outcome, expected):
-    visualizer = type(playback)(
-        playback.puzzle, replace(playback.data, outcome=outcome)
-    )
+    if outcome is Outcome.UNIQUE:
+        visualizer = playback
+    elif isinstance(playback, MeowVisualizer):
+        size = 4 if outcome is Outcome.MULTIPLE else 2
+        puzzle = MeowPuzzle.from_region_grid(
+            tuple(tuple("ABCD"[:size]) for _ in range(size))
+        )
+        visualizer = MeowVisualizer(puzzle, solve(puzzle))
+    else:
+        grid = [list(row) for row in UNIQUE_SOLUTION]
+        if outcome is Outcome.MULTIPLE:
+            for row, col in ((0, 3), (0, 4), (3, 3), (3, 4)):
+                grid[row][col] = 0
+        else:
+            grid[0][0] = 1
+            grid[0][7] = grid[2][0] = 0
+        puzzle = Puzzle(grid)
+        visualizer = SudokuVisualizer(puzzle, SudokuSolver(puzzle).solve())
+    assert visualizer.outcome is outcome
     assert visualizer._status_badge() == expected
     assert type(visualizer)._status_badge is PlaybackScreen._status_badge
     visualizer.draw()
 
 
-def test_visualizers_reject_raw_results_and_wrong_frame_types(playback):
-    with pytest.raises(TypeError, match="PlaybackData"):
+def test_visualizers_reject_nonresults_and_foreign_snapshots(playback):
+    with pytest.raises(TypeError, match="SolveResult"):
         type(playback)(playback.puzzle, object())
-    with pytest.raises(TypeError, match="PlaybackData"):
-        type(playback)(playback.puzzle, PlaybackData(Outcome.UNIQUE, (object(),)))
+    if isinstance(playback, MeowVisualizer):
+        foreign = SudokuSolver(Puzzle(UNIQUE_GRID)).solve()
+    else:
+        foreign = solve(load_preset("쉬움"))
+    with pytest.raises(TypeError):
+        type(playback)(playback.puzzle, foreign)
+    bad = replace(
+        playback.result.run.initial_logic_result,
+        initial_state=object(),
+        final_state=object(),
+    )
+    result = replace(
+        playback.result, run=replace(playback.result.run, initial_logic_result=bad)
+    )
+    with pytest.raises(TypeError):
+        type(playback)(playback.puzzle, result)
 
 
 def test_visualizers_reject_another_puzzles_trace(playback):
@@ -91,7 +118,7 @@ def test_visualizers_reject_another_puzzles_trace(playback):
     else:
         other = Puzzle([[0] * 9 for _ in range(9)])
     with pytest.raises(ValueError, match="전달된 문제"):
-        type(playback)(other, playback.data)
+        type(playback)(other, playback.result)
 
 
 def test_draw_delivers_the_exact_current_frame_to_both_hooks(playback, monkeypatch):
@@ -121,9 +148,9 @@ def test_all_builtin_frames_render_effects_within_the_details_area(app, monkeypa
     )
     for puzzle in puzzles:
         view = (
-            MeowVisualizer(puzzle, meow_playback(solve(puzzle)))
+            MeowVisualizer(puzzle, solve(puzzle))
             if app == "regions"
-            else SudokuVisualizer(puzzle, sudoku_playback(SudokuSolver(puzzle).solve()))
+            else SudokuVisualizer(puzzle, SudokuSolver(puzzle).solve())
         )
         draw_effects = view._draw_effect_items
         visible_groups = []

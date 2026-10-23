@@ -4,8 +4,8 @@ import sys
 
 from sample_puzzles import UNIQUE_GRID, UNIQUE_SOLUTION
 
+from puzzle_common.engine import Outcome, SolveResult
 from sudoku.board import Puzzle
-from sudoku.solve_types import SolveStatus
 from sudoku.solver import SudokuSolver
 
 
@@ -27,6 +27,8 @@ def test_public_solver_runs_the_shared_engine() -> None:
     finally:
         sys.setprofile(previous_profile)
 
-    assert result.status is SolveStatus.SOLVED_UNIQUE
-    assert result.solution == UNIQUE_SOLUTION
+    assert isinstance(result, SolveResult)
+    assert result.outcome is Outcome.UNIQUE
+    assert result.solution[0] == UNIQUE_SOLUTION
+    assert result.run.solutions[0] == result.solution
     assert len(calls) == 1

@@ -134,7 +134,7 @@ class WebTextDialog:
         self._textarea = textarea
         textarea.id = _TEXTAREA_ID
         textarea.rows = 12
-        textarea.value = text
+        _set_dom_text(textarea, text)
         textarea.autocapitalize = "off"
         textarea.autocomplete = "off"
         textarea.spellcheck = False

@@ -2,6 +2,8 @@
 
 import asyncio
 
+import pygame  # noqa: F401  # Pygbag이 pygame WebAssembly 모듈을 미리 불러오게 한다.
+
 from sudoku.app import main
 
 if __name__ == "__main__":

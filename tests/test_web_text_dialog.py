@@ -33,6 +33,8 @@ class FakeElement:
     def innerHTML(self, value: str) -> None:
         self._innerHTML = value
         self.textContent = unescape(value)
+        if self.tagName == "TEXTAREA":
+            self.value = self.textContent
 
     def appendChild(self, child: "FakeElement") -> None:
         child.parent = self

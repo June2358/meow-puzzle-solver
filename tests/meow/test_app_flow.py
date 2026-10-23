@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 
 import pytest
 
@@ -45,15 +46,13 @@ def test_solve_once_then_edit_restores_the_same_region_grid(
         async def run(self):
             return puzzle.region_grid
 
-    monkeypatch.setattr(app_module, "MeowInputDialog", FakeDialog)
-    monkeypatch.setattr(app_module, "MeowVisualizer", FakeVisualizer)
-    monkeypatch.setattr(
-        app_module,
-        "solve",
-        lambda received: solve_calls.append(received) or solved,
+    plugin = replace(
+        app_module.PLUGIN,
+        create_editor=FakeDialog,
+        create_player=FakeVisualizer,
+        solve=lambda received: solve_calls.append(received) or to_playback(solved),
     )
-
-    asyncio.run(app_module.main())
+    asyncio.run(shared_app.run_app(plugin))
 
     assert dialog_drafts == [None, puzzle.region_grid]
     assert solve_calls == [puzzle]
@@ -77,10 +76,10 @@ def test_unsolvable_result_returns_to_editor_with_the_common_message(monkeypatch
     def forbidden_player(*args):
         pytest.fail("해 없는 결과는 편집 화면으로 돌아가야 합니다.")
 
-    monkeypatch.setattr(app_module, "MeowInputDialog", FakeDialog)
-    monkeypatch.setattr(app_module, "MeowVisualizer", forbidden_player)
-
-    asyncio.run(app_module.main())
+    plugin = replace(
+        app_module.PLUGIN, create_editor=FakeDialog, create_player=forbidden_player
+    )
+    asyncio.run(shared_app.run_app(plugin))
 
     assert calls == [
         (None, None),

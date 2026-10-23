@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pygame
 import pytest
 
+from puzzle_common.app import PuzzlePlugin
 from puzzle_common.presentation import Outcome, PlaybackData
 
 
@@ -44,7 +45,7 @@ def test_shared_flow_reopens_editor_with_the_returned_draft(lifecycle, outcome):
         assert (received, solved) == (puzzle, result)
         return screen(edited)
 
-    asyncio.run(run_app(editor, solver, player, lambda _: draft))
+    asyncio.run(run_app(PuzzlePlugin(editor, solver, player, lambda _: draft)))
 
     assert edits == [(None, None), (edited, None)]
     assert lifecycle == ["init", "quit"]
@@ -67,10 +68,7 @@ def test_shared_flow_keeps_draft_and_error_when_result_cannot_be_shown(lifecycle
 
     asyncio.run(
         run_app(
-            editor,
-            lambda _: result,
-            forbidden_player,
-            lambda _: draft,
+            PuzzlePlugin(editor, lambda _: result, forbidden_player, lambda _: draft)
         )
     )
 
@@ -88,6 +86,32 @@ def test_shared_flow_quits_if_editor_construction_raises(lifecycle):
         raise RuntimeError("editor failed")
 
     with pytest.raises(RuntimeError, match="editor failed"):
-        asyncio.run(run_app(failing_editor, lambda _: None, screen, lambda _: None))
+        asyncio.run(
+            run_app(
+                PuzzlePlugin(failing_editor, lambda _: None, screen, lambda _: None)
+            )
+        )
+
+    assert lifecycle == ["init", "quit"]
+
+
+@pytest.mark.parametrize("stage", ("solve", "player"))
+def test_shared_flow_quits_if_a_registered_stage_raises(lifecycle, stage):
+    from dataclasses import replace
+
+    from puzzle_common.app import run_app
+
+    def fail(*args):
+        raise RuntimeError(f"{stage} failed")
+
+    plugin = PuzzlePlugin(
+        lambda *_: screen(object()),
+        lambda _: PlaybackData(Outcome.UNIQUE, (object(),)),
+        lambda *_: screen(None),
+        lambda _: object(),
+    )
+    plugin = replace(plugin, **{"solve" if stage == "solve" else "create_player": fail})
+    with pytest.raises(RuntimeError, match=f"{stage} failed"):
+        asyncio.run(run_app(plugin))
 
     assert lifecycle == ["init", "quit"]

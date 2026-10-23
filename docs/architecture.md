@@ -1,11 +1,12 @@
 # 공통 구현과 퍼즐 어댑터
 
-두 앱은 하나의 입력 화면과 하나의 풀이 재생 화면을 사용한다.
+두 앱은 하나의 풀이 실행 엔진, 하나의 입력 화면과 하나의 풀이 재생 화면을 사용한다.
 공통 모듈은 `meow`, `sudoku`를 import하지 않으며 앱 이름으로 분기하지 않는다.
 
 | 공통 구현 | 책임 | 퍼즐별로 제공할 내용 |
 | --- | --- | --- |
-| `puzzle_common.app.run_app` | pygame 수명주기, 편집 → 풀이 → 재생 → 편집 반복, 해 없음의 편집 복귀, 종료 정리 | 편집기/재생기 생성, 정규화된 solve, 초안 추출 |
+| `puzzle_common.engine.Engine` | 논리 고정점, 순차 한 단계 가정, 반증·재추론, 상한이 있는 조용한 DFS, 공통 실행 기록 | 같은 State 계약, 기법/적용/순위/이력/가정/반증/MRV/해 동등성 규칙 |
+| `puzzle_common.app.run_app` | pygame 수명주기, 편집 → 풀이 → 재생 → 편집 반복, 해 없음의 편집 복귀, 종료 정리 | `PuzzlePlugin` 하나에 편집기/재생기, 정규화된 solve, 초안 추출 등록 |
 | `puzzle_common.presentation.PlaybackData` | 공통 해 분류와 비어 있지 않은 불변 단계 목록 | `meow.presentation.to_playback`, `sudoku.presentation.to_playback`이 기존 결과를 변환 |
 | `puzzle_common.layout` | 입력/재생 창·보드·패널의 배치, `cell_rect`/`cell_at` 셀 좌표와 히트 검사 | 실제 격자 크기 |
 | `puzzle_common.constraints.locked_candidate_targets` | 후보가 한 단위에 모였을 때 원본 단위 밖에서 제거할 칸 선택 | 단위/후보/가능 칸 판정, 기법 순서, 최소 근거 수와 설명 |
@@ -14,6 +15,49 @@
 | `puzzle_common.catalog.read_catalog` | 패키지 JSON 파일 읽기와 파일/JSON 오류 처리 | 프리셋 스키마 검증과 캐시 |
 | `puzzle_common.json_input.decode_json` | 입력과 프리셋 JSON 디코딩, 구문/과도한 복잡도 오류 처리 | 실제 숫자/영역 JSON 스키마 검증과 앱별 오류 타입 |
 | 그 외 `puzzle_common` | 폰트/색상/텍스트 줄바꿈/격자선, 좌표 이름, 버튼/패널, 클립보드, DOM textarea, 프레임 처리 | 실제로 다른 폰트 크기와 퍼즐 영역 경계 |
+
+## 같은 실행 규칙
+
+```mermaid
+flowchart LR
+    M[MEOW 데이터·규칙] --> E[공통 Engine]
+    S[Sudoku 데이터·규칙] --> E
+    E --> L[논리 고정점]
+    L --> P[순차 가정·반증·재추론]
+    P --> D[필요한 해 수까지 DFS]
+    D --> R[공통 SolveRun]
+    R --> V[퍼즐 설명 변환 → 공통 재생 화면]
+```
+
+`EngineState` 계약은 `clone()`, `snapshot()`, `find_contradiction()`,
+`is_complete()`이다. 각 퍼즐은 기존 상태와 불변 스냅샷을 이 계약으로 제공한다.
+`EngineDomain`은 아래 여덟 동작을 제공한다.
+
+| 동작 | 퍼즐이 결정하는 내용 |
+| --- | --- |
+| `find_deduction(snapshot)` | 기존 기법 우선순위에 따른 다음 추론 |
+| `apply_deduction(state, deduction)` | 검증된 상태 변경과 후보 전파 |
+| `probe_candidates(snapshot)` | 화면에 설명할 가정 후보의 순서 |
+| `probe_stalled(decision)` | 해당 풀이의 정체 이력 갱신 |
+| `assume(state, decision)` | 하나의 가정을 상태에 적용 |
+| `refutation(decision, contradiction)` | 반증된 가정을 제외하는 추론 생성 |
+| `search_candidates(snapshot)` | MRV 탐색 후보와 순서 |
+| `solution_key(snapshot)` | 두 해가 같은지 판정할 값 |
+
+`meow.engine_adapter.MeowDomain`, `sudoku.engine_adapter.SudokuDomain`에는
+이 규칙과 고유 점수 계산만 있다. 고정점·가정 순회·반증 재시작·재귀 탐색은 엔진에서
+한 번만 구현한다. 모순을 먼저 확인하고 기법을 검색한 뒤, 더 할 기법이 없을 때 완성을
+확인한다. 가정 상태는 clone이며, 조용한 DFS는 화면 기록과 가정 순위 이력을 만들지 않는다.
+
+실행 기록은 `LogicStep → LogicRun → ProbeRun/ProbeRound → SolveRun`으로 일정하다.
+기존 MEOW LogicResult/타임라인과 Sudoku SolveStep은 이 공통 기록에서 설명을 변환한다.
+MEOW의 독립 exact 검증은 유지하고 엔진에는 해 상한1을 전달한다. Sudoku는 상한2를
+전달하며 가정에서 발견한 해를 첫 해로 보존한 채 중복 없이 두 번째 해를 확인한다.
+
+앱별 `app.py`는 `PLUGIN = PuzzlePlugin(...)` 등록 데이터만 제공한다. 두 웹 진입점과
+`python -m meow`, `python -m sudoku`는 모두 `run_app(PLUGIN)`을 실행한다.
+공통 패키지는 퍼즐을 검색하거나 import하는 전역 레지스트리를 갖지 않는다.
+새 퍼즐도 같은 상태/규칙 계약, 설명·보드 어댑터와 PLUGIN을 제공하면 같은 엔진을 사용한다.
 
 ## 입력 화면
 
@@ -59,12 +103,14 @@ Visualizers는 원본 SolveResult 대신 각 퍼즐의 typed frame을 담은 Pla
 ## 변경 기준
 
 Sudoku의 pointing/claiming과 MEOW의 영역↔행/열 잠금은 같은 후보 고정 연산을 사용한다.
-실제 배치/제외 적용과 풀이 기록은 각 솔버에 남긴다. MEOW의 모순 판정과 메시지는
+실제 배치/제외의 고유 연산은 퍼즐 어댑터가 제공하고, 실행과 공통 기록은 엔진이 담당한다.
+MEOW의 모순 판정과 메시지는
 `LogicSnapshot.contradiction_message()`가 담당한다. 버튼은 그릴 때 호버를 계산하며
 입력/재생 화면이 별도의 호버 상태를 갱신하지 않는다.
 
 버튼·패널·조작·메시지·입력창·앱 전환을 바꿀 때에는 공통 모듈을 수정한다.
-퍼즐 규칙·풀이 순서·JSON 형식·숫자 또는 영역의 의미를 바꿀 때에는 해당
+추론 종료·가정 실행·반증 재시작·탐색 흐름을 바꿀 때에는 `puzzle_common.engine`을 수정한다.
+퍼즐 규칙·기법 우선순위·JSON 형식·숫자 또는 영역의 의미를 바꿀 때에는 해당
 퍼즐의 코드와 어댑터를 수정한다. 공통 모듈에서 앱 이름을 검사하는 방식으로
 예외를 쌓지 않는다.
 

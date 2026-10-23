@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Iterator
+from dataclasses import replace
 
 import pytest
 from sample_puzzles import UNIQUE_GRID, UNIQUE_SOLUTION
@@ -54,8 +55,10 @@ def test_unsolvable_result_returns_to_editor_with_specific_message(
     quit_calls: list[None] = []
 
     class FakeDialog:
-        def __init__(self, **kwargs: object) -> None:
-            dialog_calls.append(kwargs)
+        def __init__(self, initial_board=None, initial_error=None) -> None:
+            dialog_calls.append(
+                dict(initial_board=initial_board, initial_error=initial_error)
+            )
 
         async def run(self) -> Puzzle | None:
             return next(dialog_results)
@@ -71,14 +74,17 @@ def test_unsolvable_result_returns_to_editor_with_specific_message(
         def __init__(self, *args: object, **kwargs: object) -> None:
             visualizer_calls.append((args, kwargs))
 
-    monkeypatch.setattr(app_module, "SudokuInputDialog", FakeDialog)
-    monkeypatch.setattr(app_module, "SudokuSolver", FakeSolver)
-    monkeypatch.setattr(app_module, "SudokuVisualizer", ForbiddenVisualizer)
+    plugin = replace(
+        app_module.PLUGIN,
+        create_editor=FakeDialog,
+        solve=lambda puzzle: to_playback(FakeSolver(puzzle).solve()),
+        create_player=ForbiddenVisualizer,
+    )
     monkeypatch.setattr(shared_app.pygame, "init", lambda: None)
     monkeypatch.setattr(shared_app.pygame.key, "stop_text_input", lambda: None)
     monkeypatch.setattr(shared_app.pygame, "quit", lambda: quit_calls.append(None))
 
-    asyncio.run(app_module.main())
+    asyncio.run(shared_app.run_app(plugin))
 
     assert len(dialog_calls) == 2
     assert dialog_calls[1]["initial_error"] == shared_app.UNSOLVABLE_MESSAGE
@@ -97,8 +103,10 @@ def test_solved_result_opens_visualizer_and_edit_returns_same_draft(
     quit_calls: list[None] = []
 
     class FakeDialog:
-        def __init__(self, **kwargs: object) -> None:
-            dialog_calls.append(kwargs)
+        def __init__(self, initial_board=None, initial_error=None) -> None:
+            dialog_calls.append(
+                dict(initial_board=initial_board, initial_error=initial_error)
+            )
 
         async def run(self) -> Puzzle | None:
             return next(dialog_results)
@@ -119,14 +127,17 @@ def test_solved_result_opens_visualizer_and_edit_returns_same_draft(
         async def run(self):
             return puzzle.grid
 
-    monkeypatch.setattr(app_module, "SudokuInputDialog", FakeDialog)
-    monkeypatch.setattr(app_module, "SudokuSolver", FakeSolver)
-    monkeypatch.setattr(app_module, "SudokuVisualizer", FakeVisualizer)
+    plugin = replace(
+        app_module.PLUGIN,
+        create_editor=FakeDialog,
+        solve=lambda puzzle: to_playback(FakeSolver(puzzle).solve()),
+        create_player=FakeVisualizer,
+    )
     monkeypatch.setattr(shared_app.pygame, "init", lambda: None)
     monkeypatch.setattr(shared_app.pygame.key, "stop_text_input", lambda: None)
     monkeypatch.setattr(shared_app.pygame, "quit", lambda: quit_calls.append(None))
 
-    asyncio.run(app_module.main())
+    asyncio.run(shared_app.run_app(plugin))
 
     assert len(visualizer_calls) == 1
     assert visualizer_calls[0] == (puzzle, to_playback(solved_result))
@@ -141,18 +152,18 @@ def test_pygame_quits_when_async_screen_flow_raises(
     quit_calls: list[None] = []
 
     class FailingDialog:
-        def __init__(self, **kwargs: object) -> None:
+        def __init__(self, *args: object) -> None:
             pass
 
         async def run(self) -> Puzzle | None:
             raise RuntimeError("screen failed")
 
-    monkeypatch.setattr(app_module, "SudokuInputDialog", FailingDialog)
+    plugin = replace(app_module.PLUGIN, create_editor=FailingDialog)
     monkeypatch.setattr(shared_app.pygame, "init", lambda: None)
     monkeypatch.setattr(shared_app.pygame.key, "stop_text_input", lambda: None)
     monkeypatch.setattr(shared_app.pygame, "quit", lambda: quit_calls.append(None))
 
     with pytest.raises(RuntimeError, match="screen failed"):
-        asyncio.run(app_module.main())
+        asyncio.run(shared_app.run_app(plugin))
 
     assert quit_calls == [None]

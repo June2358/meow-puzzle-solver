@@ -16,7 +16,8 @@ def _configure_fake_project(
     project_root.mkdir()
     for app in ("meow", "sudoku"):
         (project_root / f"main_{app}.py").write_text(
-            f"from {app}.app import main\n", encoding="utf-8"
+            f"from {app}.app import PLUGIN\nfrom puzzle_common.app import run_app\n",
+            encoding="utf-8",
         )
         package = project_root / app
         package.mkdir()

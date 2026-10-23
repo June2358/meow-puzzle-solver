@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from puzzle_common.engine import Engine
+
+from .engine_adapter import MeowDomain, logic_result_from
 from .model import Puzzle
-from .solve_types import LogicResult, LogicStatus, LogicStep
+from .solve_types import LogicResult
 from .state import LogicState
-from .techniques import find_next_deduction
 
 
 class LogicSolver:
@@ -28,49 +30,7 @@ class LogicSolver:
                 raise ValueError("initial_state는 같은 퍼즐에 속해야 합니다.")
             state = initial_state.clone()
 
-        initial_snapshot = state.snapshot()
-        steps: list[LogicStep] = []
-
-        while True:
-            before = state.snapshot()
-            message = before.contradiction_message()
-            if message is not None:
-                status = LogicStatus.CONTRADICTION
-                break
-
-            deduction = find_next_deduction(before)
-            if deduction is None:
-                if before.is_solved():
-                    status = LogicStatus.SOLVED_LOGICALLY
-                    message = "결정적 추론만으로 해결했습니다."
-                else:
-                    status = LogicStatus.STALLED
-                    message = "현재 구현된 논리 기법으로 더 진행할 수 없습니다."
-                break
-
-            changed = False
-            for cell in deduction.placements:
-                changed = state.place_cat(cell) or changed
-            for cell in deduction.exclusions:
-                changed = state.exclude(cell) or changed
-            if not changed:
-                raise RuntimeError("finder가 상태를 바꾸지 않는 추론을 반환했습니다.")
-
-            step = LogicStep(
-                number=len(steps) + 1,
-                deduction=deduction,
-                before=before,
-                after=state.snapshot(),
-            )
-            steps.append(step)
-
-        return LogicResult(
-            status=status,
-            initial_state=initial_snapshot,
-            final_state=before,
-            steps=tuple(steps),
-            message=message,
-        )
+        return logic_result_from(Engine(MeowDomain()).propagate(state))
 
 
 def solve_logically(

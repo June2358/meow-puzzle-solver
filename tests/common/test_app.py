@@ -4,6 +4,8 @@ from types import SimpleNamespace
 import pygame
 import pytest
 
+from puzzle_common.presentation import Outcome, PlaybackData
+
 
 def screen(value):
     async def run():
@@ -21,10 +23,12 @@ def lifecycle(monkeypatch):
     return calls
 
 
-def test_shared_flow_reopens_editor_with_the_returned_draft(lifecycle):
+@pytest.mark.parametrize("outcome", (Outcome.UNIQUE, Outcome.MULTIPLE))
+def test_shared_flow_reopens_editor_with_the_returned_draft(lifecycle, outcome):
     from puzzle_common.app import run_app
 
-    puzzle, result, draft, edited = object(), object(), object(), object()
+    puzzle, draft, edited = object(), object(), object()
+    result = PlaybackData(outcome, (object(),))
     inputs = iter((puzzle, None))
     edits = []
 
@@ -49,7 +53,8 @@ def test_shared_flow_reopens_editor_with_the_returned_draft(lifecycle):
 def test_shared_flow_keeps_draft_and_error_when_result_cannot_be_shown(lifecycle):
     from puzzle_common.app import run_app
 
-    puzzle, result, draft = object(), object(), object()
+    puzzle, draft = object(), object()
+    result = PlaybackData(Outcome.UNSOLVABLE, (object(),))
     inputs = iter((puzzle, None))
     edits = []
 
@@ -66,11 +71,13 @@ def test_shared_flow_keeps_draft_and_error_when_result_cannot_be_shown(lifecycle
             lambda _: result,
             forbidden_player,
             lambda _: draft,
-            lambda _: "해 없음",
         )
     )
 
-    assert edits == [(None, None), (draft, "해 없음")]
+    assert edits == [
+        (None, None),
+        (draft, "현재 입력으로 가능한 해가 없습니다. 원본 문제와 입력을 확인하세요."),
+    ]
     assert lifecycle == ["init", "quit"]
 
 

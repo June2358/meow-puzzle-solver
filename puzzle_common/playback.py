@@ -5,17 +5,23 @@ from dataclasses import dataclass
 
 import pygame
 
+from .layout import get_board_layout
+from .presentation import Outcome, PlaybackData
 from .runtime import next_frame
 from .ui_components import Button, draw_panel
 from .ui_style import (
     ACCENT,
+    ACCENT_LIGHT,
     APP_BACKGROUND,
     BLACK,
     GRAY,
     LIGHT_GRAY,
     ORANGE,
+    ORANGE_LIGHT,
     PRIMARY,
     PRIMARY_DARK,
+    RED,
+    RED_LIGHT,
     Color,
     Fonts,
     configure_display,
@@ -34,7 +40,6 @@ class PlaybackDetails:
     title: str
     reason: str
     effects: EffectGroups = ()
-    status: tuple[str, Color, Color] | None = None
     annotations: tuple[tuple[str, Color], ...] = ()
     assumption: str = ""
     region_colors: tuple[Color, ...] = ()
@@ -61,28 +66,28 @@ def _pack_effect_items(
     return tuple(lines)
 
 
-class PlaybackScreen[Draft]:
+class PlaybackScreen[Draft, Frame]:
     """Own presentation and playback controls without importing a puzzle type."""
 
     def __init__(
         self,
         *,
-        frame_count: int,
+        data: PlaybackData[Frame],
         edit_draft: Draft,
-        size: tuple[int, int],
+        board_size: int,
         caption: str,
-        title: str,
-        board_rect: pygame.Rect,
-        panel_rect: pygame.Rect,
         fonts: Fonts,
     ) -> None:
-        self.frame_count = frame_count
+        self.data = data
         self._edit_draft = edit_draft
-        self._title = title
-        self.board_rect = board_rect
-        self.panel_rect = panel_rect
+        self._board_size = board_size
+        layout = get_board_layout(board_size)
+        self.cell_size = layout.cell_size
+        self.board_rect = layout.board_rect
+        self.board_origin = self.board_rect.topleft
+        self.panel_rect = layout.panel_rect
         self.fonts = fonts
-        self.screen = configure_display(size, caption)
+        self.screen = configure_display(layout.window_size, caption)
         self.current_step_index = 0
         self.running = True
         self.autoplay_enabled = False
@@ -116,38 +121,112 @@ class PlaybackScreen[Draft]:
             self.fonts.button,
         )
 
-    def _draw_board(self) -> None:
+    @property
+    def frames(self) -> tuple[Frame, ...]:
+        return self.data.frames
+
+    @property
+    def frame_count(self) -> int:
+        return len(self.frames)
+
+    @property
+    def current_frame(self) -> Frame:
+        return self.frames[self.current_step_index]
+
+    @property
+    def outcome(self) -> Outcome:
+        return self.data.outcome
+
+    def _draw_board(self, frame: Frame) -> None:
         raise NotImplementedError
 
-    def _presentation(self) -> PlaybackDetails:
+    def _presentation(self, frame: Frame) -> PlaybackDetails:
         raise NotImplementedError
+
+    def _status_badge(self) -> tuple[str, Color, Color]:
+        if self.outcome is Outcome.MULTIPLE:
+            return "복수해 · 가능한 해 중 하나 표시", ORANGE, ORANGE_LIGHT
+        if self.outcome is Outcome.UNSOLVABLE:
+            return "해 없음 · 유효한 배치 없음", RED, RED_LIGHT
+        return "유일해", ACCENT, ACCENT_LIGHT
+
+    def _cell_rect(self, cell: tuple[int, int]) -> pygame.Rect:
+        row, column = cell
+        return pygame.Rect(
+            self.board_rect.left + column * self.cell_size,
+            self.board_rect.top + row * self.cell_size,
+            self.cell_size,
+            self.cell_size,
+        )
+
+    def _fill_cell(
+        self, cell: tuple[int, int], color: tuple[int, int, int, int]
+    ) -> None:
+        rect = self._cell_rect(cell).inflate(-4, -4)
+        if rect.width <= 0 or rect.height <= 0:
+            return
+        surface = pygame.Surface(rect.size, pygame.SRCALPHA)
+        surface.fill(color)
+        self.screen.blit(surface, rect.topleft)
+
+    def _outline_cell(
+        self, cell: tuple[int, int], color: Color, width: int = 3
+    ) -> None:
+        rect = self._cell_rect(cell).inflate(-4, -4)
+        if rect.width <= 0 or rect.height <= 0:
+            return
+        pygame.draw.rect(
+            self.screen,
+            color,
+            rect,
+            width=max(1, min(width, rect.width // 2)),
+            border_radius=max(0, min(5, rect.width // 5)),
+        )
+
+    def _draw_coordinates(self) -> None:
+        if self.cell_size < 18:
+            return
+        for index in range(self._board_size):
+            for text, center in (
+                (
+                    f"C{index + 1}",
+                    (self._cell_rect((0, index)).centerx, self.board_rect.top - 13),
+                ),
+                (
+                    f"R{index + 1}",
+                    (self.board_rect.left - 17, self._cell_rect((index, 0)).centery),
+                ),
+            ):
+                label = self.fonts.info.render(text, True, GRAY)
+                self.screen.blit(label, label.get_rect(center=center))
 
     def draw(self) -> None:
         self.screen.fill(APP_BACKGROUND)
         pygame.draw.rect(
             self.screen, LIGHT_GRAY, self.board_rect.move(0, 4), border_radius=5
         )
-        self._draw_board()
-        self._draw_panel()
+        frame = self.current_frame
+        self._draw_board(frame)
+        self._draw_coordinates()
+        self._draw_panel(frame)
         pygame.display.flip()
 
-    def _draw_panel(self) -> None:
+    def _draw_panel(self, frame: Frame) -> None:
         draw_panel(self.screen, self.panel_rect)
-        details = self._presentation()
+        details = self._presentation(frame)
         x, y = self.panel_rect.left + 18, self.panel_rect.top + 18
         width = self.panel_rect.width - 36
         self.screen.blit(
-            self.fonts.title.render(self._title, True, PRIMARY_DARK), (x, y)
+            self.fonts.title.render("풀이 과정", True, PRIMARY_DARK), (x, y)
         )
         y += 38
-        if details.status is not None:
-            text, color, background = details.status
-            surface = self.fonts.body.render(text, True, color)
-            rect = surface.get_rect(topleft=(x, y)).inflate(18, 10)
-            rect.topleft = (x, y)
-            pygame.draw.rect(self.screen, background, rect, border_radius=8)
-            self.screen.blit(surface, (x + 9, y + 5))
-            y = rect.bottom + 16
+        text, color, background = self._status_badge()
+        surface = self.fonts.info.render(text, True, color)
+        rect = surface.get_rect(topleft=(x, y)).inflate(18, 10)
+        rect.topleft = (x, y)
+        pygame.draw.rect(self.screen, background, rect, border_radius=8)
+        self.screen.blit(surface, (x + 9, y + 5))
+        y = rect.bottom + 12
         counter = f"{self.current_step_index + 1} / {self.frame_count} 단계"
         self.screen.blit(self.fonts.heading.render(counter, True, BLACK), (x, y))
         y += 30
@@ -162,7 +241,13 @@ class PlaybackScreen[Draft]:
         )
         for text, color in details.annotations:
             y = self._draw_wrapped(
-                text, x, y, color=color, max_width=width, max_y=y + 48
+                text,
+                x,
+                y,
+                color=color,
+                font=self.fonts.info,
+                max_width=width,
+                max_y=y + 48,
             )
         y = self._draw_region_chips(details.region_colors, x, y)
         pygame.draw.line(
@@ -192,7 +277,7 @@ class PlaybackScreen[Draft]:
             if y + 23 > details_bottom:
                 break
             y += 6
-            self.screen.blit(self.fonts.candidate.render(label, True, PRIMARY), (x, y))
+            self.screen.blit(self.fonts.info.render(label, True, PRIMARY), (x, y))
             y += 20
             y = self._draw_effect_items(
                 items, x, y, max_width=width, max_y=details_bottom
@@ -218,7 +303,7 @@ class PlaybackScreen[Draft]:
             (-32, "←/→ · Home/End 이동"),
             (-14, "Space 재생 · Esc 편집"),
         ):
-            surface = self.fonts.candidate.render(text, True, GRAY)
+            surface = self.fonts.info.render(text, True, GRAY)
             self.screen.blit(
                 surface,
                 surface.get_rect(
@@ -233,10 +318,10 @@ class PlaybackScreen[Draft]:
         if not colors:
             return y
         y += 5
-        label = self.fonts.candidate.render("관련 색상 영역", True, GRAY)
+        label = self.fonts.info.render("관련 색상 영역", True, GRAY)
         self.screen.blit(label, (x, y + 1))
         chip_x = x + label.get_width() + 10
-        chip_size = max(16, self.fonts.candidate.get_height() - 1)
+        chip_size = max(16, self.fonts.info.get_height() - 1)
         for color in colors:
             rect = pygame.Rect(chip_x, y, chip_size, chip_size)
             pygame.draw.rect(self.screen, color, rect, border_radius=4)

@@ -6,38 +6,26 @@ import pygame
 
 from puzzle_common.coordinates import cell_name as _cell_name
 from puzzle_common.playback import PlaybackDetails, PlaybackScreen
+from puzzle_common.presentation import Outcome, PlaybackData
 from puzzle_common.ui_style import (
     ACCENT,
-    ACCENT_LIGHT,
     GRAY,
     ORANGE,
-    ORANGE_LIGHT,
     PRIMARY_DARK,
     RED,
-    RED_LIGHT,
     WHITE,
     Color,
 )
 
-from .exact_solver import ExactStatus
 from .model import Cell, Puzzle, RegionGrid
 from .solve_types import SOLVER_ALGORITHM_LABELS, SolverAlgorithm
-from .solver import SolveResult
 from .state import CellState
-from .timeline import PlaybackFrame, TimelineKind, build_timeline
+from .timeline import PlaybackFrame, TimelineKind
 from .ui_style import (
     draw_region_grid_lines,
     get_fonts,
     region_palette,
 )
-
-_TARGET_BOARD_SIZE = 620
-_MAX_CELL_SIZE = 96
-_MIN_CELL_SIZE = 8
-_MARGIN = 44
-_PANEL_GAP = 26
-_PANEL_WIDTH = 350
-_MIN_WINDOW_HEIGHT = 700
 
 
 def _draw_cat(
@@ -150,51 +138,35 @@ def _draw_x(screen: pygame.Surface, rect: pygame.Rect, color: Color) -> None:
     )
 
 
-class MeowVisualizer(PlaybackScreen[RegionGrid]):
+class MeowVisualizer(PlaybackScreen[RegionGrid, PlaybackFrame]):
     """Interpret MEOW trace frames and render its colored queen board."""
 
-    def __init__(self, puzzle: Puzzle, result: SolveResult) -> None:
+    def __init__(self, puzzle: Puzzle, data: PlaybackData[PlaybackFrame]) -> None:
         if not isinstance(puzzle, Puzzle):
             raise TypeError("MeowVisualizer는 Puzzle을 받아야 합니다.")
-        if not isinstance(result, SolveResult):
-            raise TypeError("MeowVisualizer는 SolveResult를 받아야 합니다.")
-        source = result.initial_logic_result.initial_state.puzzle
-        if source.region_grid != puzzle.region_grid:
+        if not isinstance(data, PlaybackData) or any(
+            not isinstance(frame, PlaybackFrame) for frame in data.frames
+        ):
+            raise TypeError(
+                "MeowVisualizer는 PlaybackData[PlaybackFrame]을 받아야 합니다."
+            )
+        if any(
+            frame.snapshot.puzzle.region_grid != puzzle.region_grid
+            for frame in data.frames
+        ):
             raise ValueError("풀이 결과가 전달된 문제에서 생성되지 않았습니다.")
 
         self.puzzle = puzzle
-        self.result = result
-        self.timeline = build_timeline(result)
-        self.cell_size = max(
-            _MIN_CELL_SIZE,
-            min(_MAX_CELL_SIZE, _TARGET_BOARD_SIZE // puzzle.size),
-        )
-        self.margin = _MARGIN
-        self.board_size = puzzle.size * self.cell_size
-        self.board_origin = (self.margin, self.margin)
-        width = self.margin + self.board_size + _PANEL_GAP + _PANEL_WIDTH + self.margin
-        self.height = max(self.board_size + self.margin * 2, _MIN_WINDOW_HEIGHT)
-        self.panel_rect = pygame.Rect(
-            self.margin + self.board_size + _PANEL_GAP,
-            self.margin,
-            _PANEL_WIDTH,
-            self.height - self.margin * 2,
-        )
         self.region_colors = region_palette(puzzle.region_labels)
         super().__init__(
-            frame_count=len(self.timeline),
+            data=data,
             edit_draft=puzzle.region_grid,
-            size=(width, self.height),
+            board_size=puzzle.size,
             caption="MEOW · Queens 퍼즐 풀이 과정",
-            title="MEOW · Queens 풀이 과정",
-            board_rect=pygame.Rect(
-                *self.board_origin, self.board_size, self.board_size
-            ),
-            panel_rect=self.panel_rect,
             fonts=get_fonts(),
         )
 
-    def _draw_board(self) -> None:
+    def _draw_board(self, frame: PlaybackFrame) -> None:
         self._draw_region_backgrounds()
         draw_region_grid_lines(
             self.screen,
@@ -203,13 +175,11 @@ class MeowVisualizer(PlaybackScreen[RegionGrid]):
             self.cell_size,
             region_width=max(2, min(4, self.cell_size // 12)),
         )
-        self._draw_coordinates()
-        self._draw_cell_states()
-        if self.current_frame.active_assumption is not None:
-            self._outline_cell(self.current_frame.active_assumption, ORANGE, 3)
+        self._draw_cell_states(frame)
+        if frame.active_assumption is not None:
+            self._outline_cell(frame.active_assumption, ORANGE, 3)
 
-    def _presentation(self) -> PlaybackDetails:
-        frame = self.current_frame
+    def _presentation(self, frame: PlaybackFrame) -> PlaybackDetails:
         probing = (
             frame.kind is TimelineKind.LOGIC_STEP
             and frame.active_assumption is not None
@@ -217,8 +187,7 @@ class MeowVisualizer(PlaybackScreen[RegionGrid]):
         return PlaybackDetails(
             title=frame.title,
             reason=frame.message or frame.title,
-            effects=self._effect_groups(),
-            status=self._status_badge(),
+            effects=self._effect_groups(frame),
             annotations=(
                 (SOLVER_ALGORITHM_LABELS[SolverAlgorithm.SINGLETON_PROBING], ORANGE),
             )
@@ -227,32 +196,7 @@ class MeowVisualizer(PlaybackScreen[RegionGrid]):
             assumption=f"{_cell_name(frame.active_assumption)} = 고양이"
             if frame.active_assumption is not None
             else "",
-            region_colors=self._region_chip_colors(),
-        )
-
-    @property
-    def current_frame(self) -> PlaybackFrame:
-        return self.timeline[self.current_step_index]
-
-    def _cell_rect(self, cell: Cell) -> pygame.Rect:
-        row, column = cell
-        return pygame.Rect(
-            self.board_origin[0] + column * self.cell_size,
-            self.board_origin[1] + row * self.cell_size,
-            self.cell_size,
-            self.cell_size,
-        )
-
-    def _outline_cell(self, cell: Cell, color: Color, width: int = 3) -> None:
-        rect = self._cell_rect(cell).inflate(-4, -4)
-        if rect.width <= 0 or rect.height <= 0:
-            return
-        pygame.draw.rect(
-            self.screen,
-            color,
-            rect,
-            width=max(1, min(width, rect.width // 2)),
-            border_radius=max(0, min(5, rect.width // 5)),
+            region_colors=self._region_chip_colors(frame),
         )
 
     def _draw_region_backgrounds(self) -> None:
@@ -264,27 +208,7 @@ class MeowVisualizer(PlaybackScreen[RegionGrid]):
                 self._cell_rect(cell),
             )
 
-    def _draw_coordinates(self) -> None:
-        if self.cell_size < 18:
-            return
-        font = self.fonts.candidate
-        start_x, start_y = self.board_origin
-        for index in range(self.puzzle.size):
-            column_label = font.render(f"C{index + 1}", True, GRAY)
-            row_label = font.render(f"R{index + 1}", True, GRAY)
-            column_center = start_x + index * self.cell_size + self.cell_size // 2
-            row_center = start_y + index * self.cell_size + self.cell_size // 2
-            self.screen.blit(
-                column_label,
-                column_label.get_rect(center=(column_center, start_y - 13)),
-            )
-            self.screen.blit(
-                row_label,
-                row_label.get_rect(center=(start_x - 17, row_center)),
-            )
-
-    def _draw_cell_states(self) -> None:
-        frame = self.current_frame
+    def _draw_cell_states(self, frame: PlaybackFrame) -> None:
         new_cats: set[Cell] = set()
         new_exclusions: set[Cell] = set()
         if frame.logic_step is not None:
@@ -306,22 +230,15 @@ class MeowVisualizer(PlaybackScreen[RegionGrid]):
                 )
                 _draw_cat(self.screen, rect, color)
 
-    def _status_badge(self) -> tuple[str, Color, Color]:
-        status = self.result.exact_result.status
-        if status is ExactStatus.MULTIPLE:
-            return "복수해 · 가능한 해 중 하나 표시", ORANGE, ORANGE_LIGHT
-        if status is ExactStatus.UNSOLVABLE:
-            return "해 없음 · 유효한 배치 없음", RED, RED_LIGHT
-        return "유일해", ACCENT, ACCENT_LIGHT
-
-    def _region_chip_colors(self) -> tuple[Color, ...]:
+    def _region_chip_colors(self, frame: PlaybackFrame) -> tuple[Color, ...]:
         return tuple(
             self.region_colors[self.puzzle.region_labels[index]]
-            for index in self.current_frame.region_indices
+            for index in frame.region_indices
         )
 
-    def _effect_groups(self) -> tuple[tuple[str, tuple[str, ...]], ...]:
-        frame = self.current_frame
+    def _effect_groups(
+        self, frame: PlaybackFrame
+    ) -> tuple[tuple[str, tuple[str, ...]], ...]:
         if frame.logic_step is not None:
             deduction = frame.logic_step.deduction
             groups: list[tuple[str, tuple[str, ...]]] = []
@@ -349,10 +266,9 @@ class MeowVisualizer(PlaybackScreen[RegionGrid]):
             search_label = SOLVER_ALGORITHM_LABELS[SolverAlgorithm.BACKTRACK_SEARCH]
             return (("전환", (f"{search_label}으로 답 하나 찾기",)),)
         if frame.kind is TimelineKind.FINAL:
-            status = self.result.exact_result.status
-            if status is ExactStatus.UNSOLVABLE:
+            if self.outcome is Outcome.UNSOLVABLE:
                 return (("최종 판정", ("가능한 고양이 배치 없음",)),)
-            qualifier = "대표 해" if status is ExactStatus.MULTIPLE else "유일해"
+            qualifier = "대표 해" if self.outcome is Outcome.MULTIPLE else "유일해"
             return (
                 (
                     "최종 배치",

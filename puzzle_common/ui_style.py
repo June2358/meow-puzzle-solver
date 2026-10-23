@@ -52,6 +52,7 @@ class Fonts:
     button: pygame.font.Font
     heading: pygame.font.Font
     title: pygame.font.Font
+    info: pygame.font.Font
 
 
 def _load_bundled_font(path: Path, size: int) -> pygame.font.Font:
@@ -72,6 +73,7 @@ def get_fonts(*, number_size: int, candidate_size: int) -> Fonts:
         button=_load_bundled_font(_SEMIBOLD_FONT_PATH, 17),
         heading=_load_bundled_font(_SEMIBOLD_FONT_PATH, 19),
         title=_load_bundled_font(_SEMIBOLD_FONT_PATH, 25),
+        info=_load_bundled_font(_REGULAR_FONT_PATH, 15),
     )
 
 

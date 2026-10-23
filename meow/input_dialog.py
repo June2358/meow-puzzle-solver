@@ -4,7 +4,7 @@ from typing import Final
 
 import pygame
 
-from puzzle_common.input_dialog import BOARD_AREA, GRID_START_Y, MARGIN, InputDialog
+from puzzle_common.input_dialog import InputDialog
 from puzzle_common.ui_style import (
     ACCENT,
     ACCENT_YELLOW,
@@ -40,7 +40,11 @@ class MeowInputDialog(InputDialog[Puzzle]):
     )
     parse_error = PuzzleParseError
 
-    def __init__(self, initial_grid: object | None = None) -> None:
+    def __init__(
+        self,
+        initial_grid: object | None = None,
+        initial_error: str | None = None,
+    ) -> None:
         self.draft = (
             RegionDraft.empty(DEFAULT_DRAFT_SIZE)
             if initial_grid is None
@@ -51,8 +55,9 @@ class MeowInputDialog(InputDialog[Puzzle]):
         self._replace_size_on_digit = False
         self._dragging = False
         self._drag_label: str | None = None
-        super().__init__(get_fonts(), PRESET_NAMES)
-        self._update_grid_layout()
+        super().__init__(
+            get_fonts(), PRESET_NAMES, initial_error, board_size=self.draft.size
+        )
 
     def _init_editor_controls(self, y: int) -> int:
         self._direct_title_y = y - 5
@@ -79,10 +84,10 @@ class MeowInputDialog(InputDialog[Puzzle]):
             ("이미지 / JSON", self._image_title_y),
         ):
             self.screen.blit(
-                self.fonts.body.render(label, True, PRIMARY_DARK),
+                self.fonts.info.render(label, True, PRIMARY_DARK),
                 (self.panel_inner_x, y),
             )
-        size_label = self.fonts.body.render("크기 N", True, BLACK)
+        size_label = self.fonts.info.render("크기 N", True, BLACK)
         self.screen.blit(
             size_label,
             size_label.get_rect(
@@ -149,12 +154,6 @@ class MeowInputDialog(InputDialog[Puzzle]):
         self._handle_grid_key(event)
         return False
 
-    def _update_grid_layout(self) -> None:
-        self.cell_size = min(90, max(1, BOARD_AREA // self.draft.size))
-        self.grid_width = self.cell_size * self.draft.size
-        self.grid_start_x = MARGIN + (BOARD_AREA - self.grid_width) // 2
-        self.grid_start_y = GRID_START_Y + (BOARD_AREA - self.grid_width) // 2
-
     def _replace_draft(self, draft: RegionDraft, notice: str) -> None:
         """Atomically replace the visible draft with an already-valid value."""
 
@@ -165,7 +164,7 @@ class MeowInputDialog(InputDialog[Puzzle]):
         self._replace_size_on_digit = False
         self._dragging = False
         self._drag_label = None
-        self._update_grid_layout()
+        self._update_grid_layout(draft.size)
         self._show_notice(notice)
 
     def _set_cell(self, cell: Cell, label: str | None, *, advance: bool) -> None:
@@ -177,15 +176,6 @@ class MeowInputDialog(InputDialog[Puzzle]):
         self._clear_message()
         if advance:
             self._move_linear(1)
-
-    def _move_linear(self, offset: int) -> None:
-        if self.selected_cell is None:
-            self.selected_cell = (0, 0)
-            return
-        row, column = self.selected_cell
-        index = row * self.draft.size + column
-        target = max(0, min(self.draft.size * self.draft.size - 1, index + offset))
-        self.selected_cell = divmod(target, self.draft.size)
 
     def _draw_grid(self) -> None:
         colors = region_palette(self.draft.labels)
@@ -267,9 +257,6 @@ class MeowInputDialog(InputDialog[Puzzle]):
             self._replace_size_on_digit = False
 
     def _handle_grid_key(self, event: pygame.event.Event) -> None:
-        if event.key == pygame.K_TAB:
-            self._move_linear(-1 if event.mod & pygame.KMOD_SHIFT else 1)
-            return
         if self._handle_grid_navigation(event):
             return
         if self.selected_cell is None:
@@ -277,8 +264,6 @@ class MeowInputDialog(InputDialog[Puzzle]):
         if event.key in (pygame.K_DELETE, pygame.K_BACKSPACE):
             self._set_cell(self.selected_cell, None, advance=False)
             self._drag_label = None
-            return
-        if event.mod & (pygame.KMOD_CTRL | pygame.KMOD_ALT):
             return
         text = getattr(event, "unicode", "").upper()
         if len(text) == 1 and "A" <= text <= "Z":

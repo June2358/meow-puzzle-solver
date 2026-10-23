@@ -5,17 +5,22 @@ from typing import Protocol
 
 import pygame
 
+from .presentation import Outcome, PlaybackData
+
+UNSOLVABLE_MESSAGE = (
+    "현재 입력으로 가능한 해가 없습니다. 원본 문제와 입력을 확인하세요."
+)
+
 
 class Screen[T](Protocol):
     async def run(self) -> T | None: ...
 
 
-async def run_app[Puzzle, Draft, Result](
+async def run_app[Puzzle, Draft, Frame](
     create_editor: Callable[[Draft | None, str | None], Screen[Puzzle]],
-    solve: Callable[[Puzzle], Result],
-    create_player: Callable[[Puzzle, Result], Screen[Draft]],
+    solve: Callable[[Puzzle], PlaybackData[Frame]],
+    create_player: Callable[[Puzzle, PlaybackData[Frame]], Screen[Draft]],
     get_draft: Callable[[Puzzle], Draft],
-    get_error: Callable[[Result], str | None] | None = None,
 ) -> None:
     pygame.init()
     draft: Draft | None = None
@@ -28,7 +33,7 @@ async def run_app[Puzzle, Draft, Result](
                 return
             draft = get_draft(puzzle)
             result = solve(puzzle)
-            error = get_error(result) if get_error is not None else None
+            error = UNSOLVABLE_MESSAGE if result.outcome is Outcome.UNSOLVABLE else None
             if error is not None:
                 continue
             draft = await create_player(puzzle, result).run()

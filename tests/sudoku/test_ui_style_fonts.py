@@ -68,10 +68,12 @@ def test_get_fonts_use_real_pretendard_weights() -> None:
         fonts.button,
         fonts.heading,
         fonts.title,
+        fonts.info,
     )
 
     assert {font.name for font in all_fonts} == {"Pretendard"}
     assert fonts.body.style_name == "Regular"
+    assert fonts.info.style_name == "Regular"
     assert fonts.candidate.style_name == "Regular"
     assert fonts.number.style_name == "SemiBold"
     assert fonts.button.style_name == "SemiBold"
@@ -79,6 +81,7 @@ def test_get_fonts_use_real_pretendard_weights() -> None:
     assert fonts.title.style_name == "SemiBold"
     assert not any(font.get_bold() for font in all_fonts)
     assert fonts.candidate.get_point_size() == 15
+    assert fonts.info.get_point_size() == 15
 
 
 def test_get_fonts_fails_when_a_bundled_asset_is_missing(

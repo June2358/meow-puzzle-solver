@@ -1,15 +1,29 @@
 """The same playback contract runs against both real puzzle adapters."""
 
 import asyncio
+from dataclasses import replace
 
 import pygame
 import pytest
 from sample_puzzles import UNIQUE_GRID
 
-from meow.puzzle_catalog import load_preset
+from meow.presentation import to_playback as meow_playback
+from meow.puzzle_catalog import PRESET_NAMES, load_preset
 from meow.solver import solve
 from meow.visualizer import MeowVisualizer
+from puzzle_common.playback import PlaybackScreen
+from puzzle_common.presentation import Outcome, PlaybackData
+from puzzle_common.ui_style import (
+    ACCENT,
+    ACCENT_LIGHT,
+    ORANGE,
+    ORANGE_LIGHT,
+    RED,
+    RED_LIGHT,
+)
 from sudoku.board import Puzzle
+from sudoku.presentation import to_playback as sudoku_playback
+from sudoku.puzzle_catalog import load_puzzle_catalog
 from sudoku.solver import SudokuSolver
 from sudoku.visualizer import SudokuVisualizer
 
@@ -19,16 +33,124 @@ def playback(request):
     pygame.init()
     if request.param == "regions":
         puzzle = load_preset("쉬움")
-        visualizer = MeowVisualizer(puzzle, solve(puzzle))
+        visualizer = MeowVisualizer(puzzle, meow_playback(solve(puzzle)))
     else:
         puzzle = Puzzle(UNIQUE_GRID)
-        visualizer = SudokuVisualizer(puzzle, SudokuSolver(puzzle).solve())
+        visualizer = SudokuVisualizer(
+            puzzle, sudoku_playback(SudokuSolver(puzzle).solve())
+        )
     yield visualizer
     pygame.display.quit()
 
 
 def key(kind, value):
     return pygame.event.Event(kind, key=value)
+
+
+def test_both_playbacks_share_board_and_panel_layout(playback):
+    assert playback.screen.get_size() == (1010, 700)
+    assert playback.board_rect.center == (315, 340)
+    assert playback.panel_rect == pygame.Rect(615, 70, 350, 560)
+
+
+def test_playback_keeps_normalized_data_and_exact_frames(playback):
+    assert playback.frames is playback.data.frames
+    assert playback.current_frame is playback.frames[0]
+    assert playback.frame_count == len(playback.data.frames)
+    assert playback.outcome is playback.data.outcome
+    assert not hasattr(playback, "result")
+
+
+@pytest.mark.parametrize(
+    "outcome, expected",
+    (
+        (Outcome.UNIQUE, ("유일해", ACCENT, ACCENT_LIGHT)),
+        (Outcome.MULTIPLE, ("복수해 · 가능한 해 중 하나 표시", ORANGE, ORANGE_LIGHT)),
+        (Outcome.UNSOLVABLE, ("해 없음 · 유효한 배치 없음", RED, RED_LIGHT)),
+    ),
+)
+def test_common_outcome_badges_render_for_both_puzzles(playback, outcome, expected):
+    visualizer = type(playback)(
+        playback.puzzle, replace(playback.data, outcome=outcome)
+    )
+    assert visualizer._status_badge() == expected
+    assert type(visualizer)._status_badge is PlaybackScreen._status_badge
+    visualizer.draw()
+
+
+def test_visualizers_reject_raw_results_and_wrong_frame_types(playback):
+    with pytest.raises(TypeError, match="PlaybackData"):
+        type(playback)(playback.puzzle, object())
+    with pytest.raises(TypeError, match="PlaybackData"):
+        type(playback)(playback.puzzle, PlaybackData(Outcome.UNIQUE, (object(),)))
+
+
+def test_visualizers_reject_another_puzzles_trace(playback):
+    if isinstance(playback, MeowVisualizer):
+        other = load_preset("보통")
+    else:
+        other = Puzzle([[0] * 9 for _ in range(9)])
+    with pytest.raises(ValueError, match="전달된 문제"):
+        type(playback)(other, playback.data)
+
+
+def test_draw_delivers_the_exact_current_frame_to_both_hooks(playback, monkeypatch):
+    delivered = []
+    original_presentation = playback._presentation
+    monkeypatch.setattr(playback, "_draw_board", lambda frame: delivered.append(frame))
+
+    def presentation(frame):
+        delivered.append(frame)
+        return original_presentation(frame)
+
+    monkeypatch.setattr(playback, "_presentation", presentation)
+    playback._set_index(2)
+    playback.draw()
+
+    assert len(delivered) == 2
+    assert delivered[0] is delivered[1] is playback.current_frame
+
+
+@pytest.mark.parametrize("app", ("regions", "digits"))
+def test_all_builtin_frames_render_effects_within_the_details_area(app, monkeypatch):
+    pygame.init()
+    puzzles = (
+        [load_preset(name) for name in PRESET_NAMES]
+        if app == "regions"
+        else [Puzzle(grid) for grid in load_puzzle_catalog().values()]
+    )
+    for puzzle in puzzles:
+        view = (
+            MeowVisualizer(puzzle, meow_playback(solve(puzzle)))
+            if app == "regions"
+            else SudokuVisualizer(puzzle, sudoku_playback(SudokuSolver(puzzle).solve()))
+        )
+        draw_effects = view._draw_effect_items
+        visible_groups = []
+
+        def check_effects(
+            items,
+            x,
+            y,
+            *,
+            draw_effects=draw_effects,
+            visible_groups=visible_groups,
+            **kwargs,
+        ):
+            bottom = draw_effects(items, x, y, **kwargs)
+            assert y < bottom <= kwargs["max_y"]
+            visible_groups.append(items)
+            return bottom
+
+        monkeypatch.setattr(view, "_draw_effect_items", check_effects)
+        for index, frame in enumerate(view.frames):
+            view._set_index(index)
+            visible_groups.clear()
+            view.draw()
+            assert visible_groups == [
+                items for _, items in view._presentation(frame).effects
+            ]
+    pygame.display.quit()
 
 
 def test_hold_ignores_os_repeat_then_uses_elapsed_time(playback):

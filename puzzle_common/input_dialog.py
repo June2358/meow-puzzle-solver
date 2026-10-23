@@ -5,6 +5,7 @@ from collections.abc import Callable, Iterable
 import pygame
 
 from .clipboard import ClipboardError, copy_text, paste_text
+from .layout import BOARD_AREA, GRID_START_Y, MARGIN, get_board_layout
 from .runtime import next_frame
 from .ui_components import Button, draw_panel
 from .ui_style import (
@@ -24,10 +25,6 @@ from .ui_style import (
 )
 from .web_text_dialog import WebTextDialog, WebTextDialogError, is_web_runtime
 
-BOARD_AREA = 540
-MARGIN = 45
-GRID_START_Y = 70
-_PANEL_GAP = 30
 _PANEL_PADDING = 18
 _BUTTON_HEIGHT = 40
 _BUTTON_SPACING = 9
@@ -41,7 +38,6 @@ class InputDialog[PuzzleT]:
     json_description: str
     direct_instructions: tuple[str, ...]
     parse_error: type[Exception]
-    panel_width = 320
     start_keys = (pygame.K_RETURN, pygame.K_KP_ENTER)
 
     def __init__(
@@ -49,18 +45,16 @@ class InputDialog[PuzzleT]:
         fonts: Fonts,
         preset_names: tuple[str, ...],
         initial_error: str | None = None,
+        *,
+        board_size: int,
     ) -> None:
-        self.dialog_width = BOARD_AREA + self.panel_width + _PANEL_GAP + 2 * MARGIN
-        self.screen = configure_display(
-            (self.dialog_width, 2 * GRID_START_Y + BOARD_AREA), self.title
-        )
+        self._update_grid_layout(board_size)
+        self.dialog_width = self.layout.window_size[0]
+        self.screen = configure_display(self.layout.window_size, self.title)
         self.fonts = fonts
         self.preset_names = preset_names
-        self.cell_size = 60
-        self.grid_width = BOARD_AREA
-        self.grid_start_x = MARGIN
-        self.grid_start_y = GRID_START_Y
-        self.panel_x = MARGIN + BOARD_AREA + _PANEL_GAP
+        self.panel_x = self.layout.panel_rect.x
+        self.panel_width = self.layout.panel_rect.width
         self.panel_inner_x = self.panel_x + _PANEL_PADDING
         self.panel_inner_width = self.panel_width - 2 * _PANEL_PADDING
         self.selected_cell: tuple[int, int] | None = None
@@ -70,6 +64,13 @@ class InputDialog[PuzzleT]:
         self._web_text_dialog: WebTextDialog | None = None
         self.editor_buttons: list[Button] = []
         self._init_buttons()
+
+    def _update_grid_layout(self, board_size: int) -> None:
+        self.layout = get_board_layout(board_size)
+        self.board_size = board_size
+        self.cell_size = self.layout.cell_size
+        self.grid_width = self.layout.board_rect.width
+        self.grid_start_x, self.grid_start_y = self.layout.board_rect.topleft
 
     def _button(
         self, rect: pygame.Rect, label: str, *, primary: bool = False
@@ -161,14 +162,14 @@ class InputDialog[PuzzleT]:
     def _draw_panel(self) -> None:
         draw_panel(
             self.screen,
-            pygame.Rect(self.panel_x, GRID_START_Y, self.panel_width, BOARD_AREA),
+            self.layout.panel_rect,
         )
         self.screen.blit(
             self.fonts.heading.render("예제 문제", True, BLACK),
             (self.panel_inner_x, GRID_START_Y + 14),
         )
         if self.progress_text:
-            progress = self.fonts.candidate.render(self.progress_text, True, GRAY)
+            progress = self.fonts.info.render(self.progress_text, True, GRAY)
             self.screen.blit(
                 progress,
                 progress.get_rect(
@@ -217,11 +218,9 @@ class InputDialog[PuzzleT]:
             json_instruction,
             "Enter 시작 · Esc 종료",
         ):
-            for line in wrap_text(
-                f"• {text}", self.fonts.candidate, self.panel_inner_width
-            ):
+            for line in wrap_text(f"• {text}", self.fonts.info, self.panel_inner_width):
                 self.screen.blit(
-                    self.fonts.candidate.render(line, True, GRAY),
+                    self.fonts.info.render(line, True, GRAY),
                     (self.panel_inner_x, y),
                 )
                 y += 20
@@ -233,12 +232,12 @@ class InputDialog[PuzzleT]:
             return
         color = RED if self.validation_error else ACCENT
         y = self.instructions_bottom + 5
-        bottom = GRID_START_Y + BOARD_AREA - 10
-        for line in wrap_text(message, self.fonts.candidate, self.panel_inner_width):
-            if y + self.fonts.candidate.get_linesize() > bottom:
+        bottom = self.layout.panel_rect.bottom - 10
+        for line in wrap_text(message, self.fonts.info, self.panel_inner_width):
+            if y + self.fonts.info.get_linesize() > bottom:
                 break
             self.screen.blit(
-                self.fonts.candidate.render(line, True, color),
+                self.fonts.info.render(line, True, color),
                 (self.panel_inner_x, y),
             )
             y += 20
@@ -290,11 +289,16 @@ class InputDialog[PuzzleT]:
             self._handle_json_action()
         elif event.key == pygame.K_ESCAPE:
             self.running = False
+        elif event.mod & (pygame.KMOD_CTRL | pygame.KMOD_ALT | pygame.KMOD_GUI):
+            return None
         elif not self._handle_editor_key(event) and event.key in self.start_keys:
             return self._handle_start()
         return None
 
     def _handle_grid_navigation(self, event: pygame.event.Event) -> bool:
+        if event.key == pygame.K_TAB:
+            self._move_linear(-1 if event.mod & pygame.KMOD_SHIFT else 1)
+            return True
         directions = {
             pygame.K_UP: (-1, 0),
             pygame.K_DOWN: (1, 0),
@@ -311,12 +315,21 @@ class InputDialog[PuzzleT]:
         if self.selected_cell is None:
             self.selected_cell = (0, 0)
             return
-        size = self.grid_width // self.cell_size
+        size = self.board_size
         row, column = self.selected_cell
         self.selected_cell = (
             max(0, min(size - 1, row + row_offset)),
             max(0, min(size - 1, column + column_offset)),
         )
+
+    def _move_linear(self, offset: int) -> None:
+        if self.selected_cell is None:
+            self.selected_cell = (0, 0)
+            return
+        row, column = self.selected_cell
+        index = row * self.board_size + column
+        target = max(0, min(self.board_size * self.board_size - 1, index + offset))
+        self.selected_cell = divmod(target, self.board_size)
 
     def _handle_prompt_action(self) -> None:
         if is_web_runtime():

@@ -6,15 +6,9 @@ from collections.abc import Iterable
 
 import pygame
 
-from .exact_solver import ExactStatus
-from .model import Cell, Puzzle, RegionGrid
-from .runtime import next_frame
-from .solve_types import SOLVER_ALGORITHM_LABELS, SolverAlgorithm
-from .solver import SolveResult
-from .state import CellState
-from .timeline import PlaybackFrame, TimelineKind, build_timeline
-from .ui_components import Button
-from .ui_style import (
+from puzzle_common.runtime import next_frame
+from puzzle_common.ui_components import Button
+from puzzle_common.ui_style import (
     ACCENT,
     ACCENT_LIGHT,
     APP_BACKGROUND,
@@ -31,10 +25,19 @@ from .ui_style import (
     WHITE,
     Color,
     configure_display,
+    wrap_text,
+)
+
+from .exact_solver import ExactStatus
+from .model import Cell, Puzzle, RegionGrid
+from .solve_types import SOLVER_ALGORITHM_LABELS, SolverAlgorithm
+from .solver import SolveResult
+from .state import CellState
+from .timeline import PlaybackFrame, TimelineKind, build_timeline
+from .ui_style import (
     draw_region_grid_lines,
     get_fonts,
     region_palette,
-    wrap_text,
 )
 
 _NAVIGATION_REPEAT_DELAY = 0.36

@@ -128,4 +128,4 @@ def test_pygbag_is_pinned_in_the_non_default_web_group() -> None:
         (build_web.PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     )
 
-    assert project["dependency-groups"]["web"] == ["pygbag==0.9.2"]
+    assert project["dependency-groups"]["web"] == ["pygbag==0.9.3"]

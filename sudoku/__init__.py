@@ -1,1 +1,1 @@
-"""Sudoku solver and pygame visualizer application."""
+"""스도쿠 솔버와 pygame 시각화 앱."""

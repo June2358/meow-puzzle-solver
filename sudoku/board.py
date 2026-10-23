@@ -1,4 +1,4 @@
-"""Validated immutable Sudoku puzzle model."""
+"""검증된 불변 스도쿠 퍼즐 모델."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -9,19 +9,17 @@ type Grid = tuple[tuple[int, ...], ...]
 
 
 class InvalidBoardError(ValueError):
-    """Raised when a value is not a structurally valid 9x9 Sudoku grid."""
+    """값이 올바른 9×9 스도쿠 격자가 아닐 때 발생한다."""
 
 
 class InvalidPuzzleError(InvalidBoardError):
-    """Raised when puzzle givens violate Sudoku constraints."""
+    """초기 단서가 스도쿠 규칙을 위반할 때 발생한다."""
 
 
 def validate_grid(grid: object) -> Grid:
-    """Validate and return an immutable, alias-free 9x9 grid.
+    """9×9 격자를 검증해 원본과 별칭을 공유하지 않는 불변 격자로 반환한다.
 
-    Values must be exact ``int`` instances in the inclusive range 0..9.
-    ``bool`` is intentionally rejected even though it is an ``int`` subclass.
-    """
+    값은 정확히 ``int``인 0~9만 허용하며 ``int``의 하위형인 ``bool``은 거부한다."""
 
     if isinstance(grid, (str, bytes)) or not isinstance(grid, Sequence):
         raise InvalidBoardError("보드는 9개 행으로 이루어진 시퀀스여야 합니다.")
@@ -73,7 +71,7 @@ def _find_conflicts_in_valid_grid(grid: Grid) -> frozenset[Cell]:
 
 
 def find_conflicting_cells(grid: object) -> frozenset[Cell]:
-    """Return every cell participating in a row, column, or box conflict."""
+    """행·열·박스 충돌에 참여하는 모든 칸을 반환한다."""
 
     normalized = validate_grid(grid)
     return _find_conflicts_in_valid_grid(normalized)
@@ -81,7 +79,7 @@ def find_conflicting_cells(grid: object) -> frozenset[Cell]:
 
 @dataclass(frozen=True, slots=True)
 class Puzzle:
-    """An immutable set of valid Sudoku givens."""
+    """유효한 초기 단서로 구성된 불변 스도쿠 퍼즐."""
 
     grid: Grid
     givens: frozenset[Cell] = field(init=False)

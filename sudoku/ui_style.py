@@ -1,4 +1,4 @@
-"""Shared pygame colors, fonts, layouts, and Sudoku drawing helpers."""
+"""공유 pygame 색상·폰트·배치와 스도쿠 그리기 도우미."""
 
 from collections.abc import Collection
 from dataclasses import dataclass
@@ -42,7 +42,7 @@ _SEMIBOLD_FONT_PATH = _FONT_DIR / "Pretendard-SemiBold.otf"
 
 @dataclass(frozen=True, slots=True)
 class Fonts:
-    """Named font roles shared by both pygame screens."""
+    """두 pygame 화면이 공유하는 이름별 폰트 역할."""
 
     number: pygame.font.Font
     body: pygame.font.Font
@@ -53,13 +53,13 @@ class Fonts:
 
 
 def _load_bundled_font(path: Path, size: int) -> pygame.font.Font:
-    """Load one exact bundled Pretendard weight."""
+    """번들된 Pretendard의 지정된 굵기를 읽는다."""
 
     return pygame.font.Font(str(path), size)
 
 
 def get_fonts() -> Fonts:
-    """Create deterministic font roles shared by Desktop and Web."""
+    """데스크톱과 웹이 공유하는 고정된 폰트 역할을 만든다."""
 
     if not pygame.font.get_init():
         pygame.font.init()
@@ -74,7 +74,7 @@ def get_fonts() -> Fonts:
 
 
 def configure_display(size: tuple[int, int], caption: str) -> pygame.Surface:
-    """Return the current display surface, resizing it only when required."""
+    """필요할 때만 크기를 바꾸고 현재 화면 surface를 반환한다."""
 
     screen = pygame.display.get_surface()
     if screen is None or screen.get_size() != size:
@@ -84,7 +84,7 @@ def configure_display(size: tuple[int, int], caption: str) -> pygame.Surface:
 
 
 def wrap_text(text: str, font: pygame.font.Font, max_width: int) -> tuple[str, ...]:
-    """Wrap text by rendered pixel width, including Korean without spaces."""
+    """공백 없는 한글도 렌더링 픽셀 너비에 맞춰 줄바꿈한다."""
 
     if max_width <= 0:
         raise ValueError("텍스트 너비는 양수여야 합니다.")
@@ -116,7 +116,7 @@ def draw_sudoku_grid_lines(
     thick_width: int = 3,
     thin_width: int = 1,
 ) -> None:
-    """Draw a 9x9 grid with heavier box boundaries."""
+    """박스 경계를 굵게 표시한 9×9 격자를 그린다."""
 
     start_x, start_y = origin
     for i in range(SIZE + 1):
@@ -153,7 +153,7 @@ def draw_conflict_cells(
     *,
     alpha: int = 128,
 ) -> None:
-    """Fill every conflicting cell with translucent red."""
+    """충돌하는 모든 칸을 반투명 빨간색으로 채운다."""
 
     if not conflicts:
         return

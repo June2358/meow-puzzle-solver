@@ -5,7 +5,7 @@ from sudoku.solve_types import SolveStatus
 from sudoku.solver import SudokuSolver
 from sudoku.topology import UNITS
 
-# No givens conflict, but R3C1 has no candidate because of the changed R1C1.
+# 초기 단서 충돌은 없지만 R1C1 변경으로 R3C1의 후보가 사라진다.
 UNSOLVABLE_GRID = [
     [1, 3, 4, 6, 7, 8, 9, 0, 2],
     [6, 7, 2, 1, 9, 5, 3, 4, 8],
@@ -18,7 +18,7 @@ UNSOLVABLE_GRID = [
     [3, 4, 5, 2, 8, 6, 1, 7, 9],
 ]
 
-# A nontrivial puzzle with multiple solutions.
+# 복수해를 가진 자명하지 않은 퍼즐.
 MULTIPLE_GRID = [
     [0, 9, 0, 0, 3, 2, 0, 0, 1],
     [7, 0, 0, 0, 9, 0, 0, 0, 0],

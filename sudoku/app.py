@@ -1,4 +1,4 @@
-"""Top-level pygame flow for editing, validating, solving, and replaying."""
+"""입력·검증·풀이·재생을 연결하는 pygame 앱 흐름."""
 
 import pygame
 
@@ -14,7 +14,7 @@ _UNSOLVABLE_MESSAGE = (
 
 
 async def main() -> None:
-    """Run the application until the user closes either screen."""
+    """사용자가 화면을 닫을 때까지 앱을 실행한다."""
 
     pygame.init()
     pygame.key.stop_text_input()

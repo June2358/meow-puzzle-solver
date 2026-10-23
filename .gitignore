@@ -1,12 +1,12 @@
-# Byte-compiled / optimized / DLL files
+# 바이트코드·최적화·DLL 파일
 __pycache__/
 *.py[cod]
 *$py.class
 
-# C extensions
+# C 확장 모듈
 *.so
 
-# Distribution / packaging
+# 배포·패키징 산출물
 .Python
 build/
 develop-eggs/
@@ -31,7 +31,7 @@ MANIFEST
 *.manifest
 *.spec
 
-# Unit test / coverage reports
+# 테스트·커버리지 보고서
 htmlcov/
 .tox/
 .nox/
@@ -46,7 +46,7 @@ coverage.xml
 .pytest_cache/
 .ruff_cache/
 
-# Virtual environments
+# 가상환경
 .venv/
 venv/
 env/
@@ -54,7 +54,7 @@ ENV/
 env.bak/
 venv.bak/
 
-# IDEs
+# 개발 도구 설정
 .vscode/
 .idea/
 *.swp
@@ -62,21 +62,21 @@ venv.bak/
 *~
 .DS_Store
 
-# Jupyter Notebook
+# Jupyter Notebook 캐시
 .ipynb_checkpoints
 
-# Environment variables
+# 환경 변수 파일
 .env
 .env.local
 
-# MyPy
+# MyPy 캐시
 .mypy_cache/
 .dmypy.json
 dmypy.json
 
-# Pyre type checker
+# Pyre 타입 검사 캐시
 .pyre/
 
-# Project specific
+# 프로젝트 임시 파일
 *.log
 *.tmp

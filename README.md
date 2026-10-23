@@ -1,4 +1,4 @@
-# Sudoku Solver & Visualizer
+# 스도쿠 솔버와 시각화
 
 9×9 스도쿠를 쉬운 논리 기법과 깊이 1의 가정으로 먼저 풀고, 사람이 설명하기 어려운 지점부터는 MRV 백트래킹으로 완성하는 pygame 애플리케이션입니다. Windows에서 pygame으로 실행하거나 웹페이지에서 바로 사용할 수 있습니다.
 
@@ -23,7 +23,7 @@
 ### pygame
 
 - Windows 10/11 (`win-64`)
-- Python 3.12.2
+- Python 3.12.15
 - pygame-ce 2.5.8
 - [uv](https://docs.astral.sh/uv/)
 
@@ -32,13 +32,13 @@ pygame 화면은 [Pretendard v1.3.9](https://github.com/orioncactus/pretendard/r
 최초 환경 준비:
 
 ```powershell
-uv sync
+uv sync --locked
 ```
 
-실행:
+`run.cmd`를 더블클릭하거나 다음 명령으로 실행합니다:
 
 ```powershell
-uv run python -m sudoku
+uv run --locked --no-dev python -m sudoku
 ```
 
 ### 개발 검사
@@ -46,9 +46,9 @@ uv run python -m sudoku
 전체 테스트와 정적 검사는 다음 명령으로 실행합니다.
 
 ```powershell
-uv run ruff check .
-uv run ruff format --check .
-uv run python -m pytest -q -W error
+uv run --locked ruff check .
+uv run --locked ruff format --check .
+uv run --locked python -m pytest -q -W error
 ```
 
 ## 문제 입력
@@ -166,7 +166,7 @@ JSON만 불러옵니다. 결과는 반드시 화면에서 원본 이미지와 �
 │   ├── assets/fonts/           # 번들 한글 폰트와 OFL
 │   └── puzzles.json            # 검증된 내장 문제
 ├── tests/
-├── .python-version             # Python 3.12.2
+├── .python-version             # Python 3.12.15
 ├── pyproject.toml              # 의존성 및 Ruff 설정
 ├── uv.lock                     # 재현 가능한 전체 의존성 잠금
 └── README.md

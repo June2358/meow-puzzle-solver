@@ -1,4 +1,4 @@
-"""Pygbag-compatible application entry point."""
+"""Pygbag과 호환되는 앱 진입점."""
 
 import asyncio
 

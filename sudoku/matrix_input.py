@@ -1,22 +1,22 @@
-"""External AI/OCR matrix contract and isolated clipboard access."""
+"""외부 AI/OCR 행렬 계약과 독립적인 클립보드 접근."""
 
 import pygame
 
-OCR_MATRIX_PROMPT = """Transcribe the Sudoku puzzle in the attached image.
+OCR_MATRIX_PROMPT = """첨부 이미지의 스도쿠 퍼즐을 전사하세요.
 
-Rules:
-1. Do not solve the puzzle or infer any missing digit.
-2. Read cells from top to bottom and left to right.
-3. Copy only clearly visible fixed/given digits.
-4. Use 0 for every blank or unreadable cell.
-5. Ignore pencil marks, candidate notes, highlights, and surrounding text.
-6. Return exactly one 9x9 JSON array of integers from 0 to 9.
-7. Return raw JSON only: no explanation, Markdown code fence, or object wrapper.
+규칙:
+1. 퍼즐을 풀거나 누락된 숫자를 추론하지 마세요.
+2. 위에서 아래, 왼쪽에서 오른쪽 순서로 칸을 읽으세요.
+3. 명확히 보이는 고정 단서 숫자만 옮기세요.
+4. 빈칸이나 읽을 수 없는 칸은 0으로 표시하세요.
+5. 연필 표시, 후보 메모, 강조와 주변 텍스트는 무시하세요.
+6. 0~9 정수로 구성된 9×9 JSON 배열 하나만 반환하세요.
+7. 설명, Markdown 코드 펜스, 객체 래퍼 없이 원시 JSON만 반환하세요.
 
-The following example demonstrates the output format only. Do not copy its
-digits unless they are actually visible in the attached image.
+아래 예시는 출력 형식만 보여 줍니다. 첨부 이미지에 실제로 보이는 숫자가
+아니라면 예시의 숫자를 복사하지 마세요.
 
-Example visible grid:
+예시 입력 격자:
 53..7....
 6..195...
 .98....6.
@@ -27,7 +27,7 @@ Example visible grid:
 ...419..5
 ....8..79
 
-Required example output:
+예시의 올바른 출력:
 [
   [5, 3, 0, 0, 7, 0, 0, 0, 0],
   [6, 0, 0, 1, 9, 5, 0, 0, 0],
@@ -42,7 +42,7 @@ Required example output:
 
 
 class ClipboardError(RuntimeError):
-    """Raised when the operating-system clipboard cannot be accessed."""
+    """운영체제 클립보드에 접근할 수 없을 때 발생한다."""
 
 
 def _ensure_clipboard() -> None:
@@ -51,7 +51,7 @@ def _ensure_clipboard() -> None:
 
 
 def copy_text(text: str) -> None:
-    """Copy text through pygame-ce's string clipboard API."""
+    """pygame-ce 문자열 클립보드 API로 텍스트를 복사한다."""
 
     if not isinstance(text, str):
         raise TypeError("클립보드에 복사할 값은 문자열이어야 합니다.")
@@ -63,7 +63,7 @@ def copy_text(text: str) -> None:
 
 
 def paste_text() -> str:
-    """Read JSON text from the clipboard."""
+    """클립보드에서 JSON 텍스트를 읽는다."""
 
     _ensure_clipboard()
     try:

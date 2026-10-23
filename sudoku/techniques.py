@@ -1,12 +1,9 @@
-"""Pure logical deductions over one immutable solver snapshot.
+"""불변 솔버 스냅샷 하나에서 수행하는 순수 논리 추론.
 
-Every finder receives the same grid and candidate snapshot. Placement finders
-batch every assignment justified by the same technique in that snapshot;
-assignments found in the batch are never fed back into the search.
-Elimination finders return the first pattern in a deterministic order. The
-solver is solely responsible for applying a returned delta and recording a
-state snapshot.
-"""
+모든 finder는 같은 격자와 후보 스냅샷을 받는다. 확정 finder는 해당 스냅샷의
+같은 기법으로 증명되는 모든 확정을 묶고, 배치 안의 확정을 탐색에 재사용하지
+않는다. 제거 finder는 고정 순서의 첫 패턴을 반환한다. 반환한 변경을 적용하고
+상태 스냅샷을 기록하는 책임은 솔버에만 있다."""
 
 from collections.abc import Callable, Iterator
 from itertools import combinations
@@ -51,7 +48,7 @@ def _unit_name(unit_index: int) -> str:
 
 
 def _merge_cells(*groups: tuple[Cell, ...] | Unit) -> tuple[Cell, ...]:
-    """Return cells in first-seen order without duplicates."""
+    """중복 없이 처음 나타난 순서로 칸을 반환한다."""
 
     return tuple(dict.fromkeys(cell for group in groups for cell in group))
 
@@ -59,15 +56,12 @@ def _merge_cells(*groups: tuple[Cell, ...] | Unit) -> tuple[Cell, ...]:
 def _compatible_assignments(
     assignments: tuple[Assignment, ...],
 ) -> tuple[Assignment, ...]:
-    """Keep a deterministic compatible batch from a possibly contradictory state.
+    """모순일 수 있는 상태에서 서로 양립하는 결정적 배치를 유지한다.
 
-    Every assignment is sound on its own. A failed one-ply branch can,
-    however, expose two forced placements that cannot coexist before the
-    solver's next contradiction check. Applying one of those placements is
-    enough to expose the contradiction, so the later conflicting placement is
-    left out instead of making batch application raise an exception. On every
-    satisfiable state this returns all assignments unchanged.
-    """
+    각 확정은 개별적으로 타당하지만 실패한 한 단계 가정에서는 모순 검사 전에
+    함께 성립할 수 없는 두 확정이 나타날 수 있다. 하나만 적용해도 모순을
+    드러내므로 뒤의 충돌 확정은 제외해 배치 적용 예외를 막는다. 해가 있는
+    모든 상태에서는 모든 확정을 변경 없이 반환한다."""
 
     compatible: list[Assignment] = []
     for assignment in assignments:
@@ -88,7 +82,7 @@ def find_full_house(
     grid: Grid,
     candidates: CandidateGrid,
 ) -> TechniqueResult | None:
-    """Find every house whose final empty cell is visible in one snapshot."""
+    """한 스냅샷에서 빈칸이 하나 남은 모든 하우스를 찾는다."""
 
     assignments_with_units: dict[Assignment, int] = {}
     for unit_index, unit in enumerate(UNITS):
@@ -141,7 +135,7 @@ def find_naked_single(
     grid: Grid,
     candidates: CandidateGrid,
 ) -> TechniqueResult | None:
-    """Find every Naked Single visible in one unchanged state snapshot."""
+    """변경되지 않은 스냅샷에서 모든 Naked Single을 찾는다."""
 
     assignments = _compatible_assignments(
         tuple(
@@ -170,7 +164,7 @@ def find_hidden_single(
     grid: Grid,
     candidates: CandidateGrid,
 ) -> TechniqueResult | None:
-    """Find every Hidden Single visible in one unchanged state snapshot."""
+    """변경되지 않은 스냅샷에서 모든 Hidden Single을 찾는다."""
 
     assignments_with_units: dict[Assignment, int] = {}
     for unit_index, unit in enumerate(UNITS):
@@ -222,7 +216,7 @@ def find_locked_candidates_pointing(
     grid: Grid,
     candidates: CandidateGrid,
 ) -> TechniqueResult | None:
-    """Find the first Box-to-Line locked-candidate elimination."""
+    """첫 Box-to-Line locked-candidate 제거를 찾는다."""
 
     for box_index, box in enumerate(BOXES):
         box_cells = frozenset(box)
@@ -296,7 +290,7 @@ def find_locked_candidates_claiming(
     grid: Grid,
     candidates: CandidateGrid,
 ) -> TechniqueResult | None:
-    """Find the first Line-to-Box locked-candidate elimination."""
+    """첫 Line-to-Box locked-candidate 제거를 찾는다."""
 
     line_groups = (("행", ROWS), ("열", COLS))
     for line_name, lines in line_groups:
@@ -349,7 +343,7 @@ def _iter_naked_subsets_in_unit(
     unit: Unit,
     size: int,
 ) -> Iterator[_NakedSubsetPattern]:
-    """Yield Naked Subset patterns in one unit's stable cell order."""
+    """한 단위의 고정된 칸 순서로 Naked Subset 패턴을 생성한다."""
 
     eligible_cells = tuple(
         (row, col)
@@ -365,7 +359,7 @@ def _iter_naked_subsets_in_unit(
 
 
 def _locked_box_index(evidence_cells: tuple[Cell, ...]) -> int | None:
-    """Return the shared box when evidence is confined to a line-box crossing."""
+    """근거가 행/열과 박스의 교차 영역에 있으면 공통 박스를 반환한다."""
 
     box_indices = {_box_index(cell) for cell in evidence_cells}
     if len(box_indices) != 1:
@@ -382,7 +376,7 @@ def _find_locked_naked_subset(
     size: int,
     technique: Technique,
 ) -> TechniqueResult | None:
-    """Find a Naked Subset confined to one line-box intersection."""
+    """행/열과 박스의 한 교차 영역에 속한 Naked Subset을 찾는다."""
 
     line_groups = (("행", ROWS), ("열", COLS))
     for line_name, lines in line_groups:
@@ -431,7 +425,7 @@ def _find_naked_subset(
     size: int,
     technique: Technique,
 ) -> TechniqueResult | None:
-    """Find the first ordinary Naked Subset elimination of one size."""
+    """주어진 크기의 첫 일반 Naked Subset 제거를 찾는다."""
 
     for unit_index, unit in enumerate(UNITS):
         for evidence_cells, digits in _iter_naked_subsets_in_unit(
@@ -475,7 +469,7 @@ def _find_hidden_subset(
     size: int,
     technique: Technique,
 ) -> TechniqueResult | None:
-    """Find the first Hidden Subset restriction of one size."""
+    """주어진 크기의 첫 Hidden Subset 제한을 찾는다."""
 
     for unit_index, unit in enumerate(UNITS):
         positions_by_digit = {
@@ -529,7 +523,7 @@ def find_locked_pair(
     grid: Grid,
     candidates: CandidateGrid,
 ) -> TechniqueResult | None:
-    """Find the first Locked Pair elimination across its line and box."""
+    """행/열과 박스에 걸친 첫 Locked Pair 제거를 찾는다."""
 
     return _find_locked_naked_subset(
         grid,
@@ -543,7 +537,7 @@ def find_naked_pair(
     grid: Grid,
     candidates: CandidateGrid,
 ) -> TechniqueResult | None:
-    """Find the first Naked Pair elimination."""
+    """첫 Naked Pair 제거를 찾는다."""
 
     return _find_naked_subset(
         grid,
@@ -557,7 +551,7 @@ def find_locked_triple(
     grid: Grid,
     candidates: CandidateGrid,
 ) -> TechniqueResult | None:
-    """Find the first Locked Triple elimination across its line and box."""
+    """행/열과 박스에 걸친 첫 Locked Triple 제거를 찾는다."""
 
     return _find_locked_naked_subset(
         grid,
@@ -571,7 +565,7 @@ def find_naked_triple(
     grid: Grid,
     candidates: CandidateGrid,
 ) -> TechniqueResult | None:
-    """Find the first Naked Triple elimination."""
+    """첫 Naked Triple 제거를 찾는다."""
 
     return _find_naked_subset(
         grid,
@@ -585,7 +579,7 @@ def find_hidden_pair(
     grid: Grid,
     candidates: CandidateGrid,
 ) -> TechniqueResult | None:
-    """Find the first Hidden Pair restriction."""
+    """첫 Hidden Pair 제한을 찾는다."""
 
     return _find_hidden_subset(
         grid,
@@ -599,7 +593,7 @@ def find_hidden_triple(
     grid: Grid,
     candidates: CandidateGrid,
 ) -> TechniqueResult | None:
-    """Find the first Hidden Triple restriction."""
+    """첫 Hidden Triple 제한을 찾는다."""
 
     return _find_hidden_subset(
         grid,
@@ -628,7 +622,7 @@ def find_next_deduction(
     grid: Grid,
     candidates: CandidateGrid,
 ) -> TechniqueResult | None:
-    """Return the first available deduction in stable easiest-first order."""
+    """쉬운 기법부터 고정 순서로 첫 가능한 추론을 반환한다."""
 
     for finder in _TECHNIQUE_FINDERS:
         result = finder(grid, candidates)

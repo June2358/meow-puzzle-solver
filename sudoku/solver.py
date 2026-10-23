@@ -1,4 +1,4 @@
-"""Human-style Sudoku reasoning with a complete-search safety net."""
+"""사람식 스도쿠 추론과 완전 탐색을 결합한 솔버."""
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
@@ -40,7 +40,7 @@ class _ProbeResult:
 
 @dataclass(slots=True)
 class _ProbeHistory:
-    """Remember stalled assumptions only while one solve is in progress."""
+    """풀이 한 번이 진행되는 동안에만 정체된 가정을 기억한다."""
 
     stalled: dict[Assignment, tuple[int, int]] = field(default_factory=dict)
     next_serial: int = 0
@@ -69,7 +69,7 @@ def _direct_h1(
     candidates: CandidateGrid,
     decision: Assignment,
 ) -> int:
-    """Count constraints made single by applying one assumption directly."""
+    """가정을 직접 적용했을 때 단일 후보가 되는 제약 수를 센다."""
 
     cell = decision.cell
     value = decision.value
@@ -109,7 +109,7 @@ def _direct_h1(
 
 
 class SudokuSolver:
-    """Explain logic and bivalue one-ply refutations, then find up to two solutions."""
+    """논리와 2후보 한 단계 반증을 설명한 뒤 최대 두 해를 찾는다."""
 
     __slots__ = ("_puzzle",)
 
@@ -119,19 +119,14 @@ class SudokuSolver:
         self._puzzle = puzzle
 
     def solve(self) -> SolveResult:
-        """Solve the puzzle and distinguish zero, one, or multiple solutions.
+        """퍼즐을 풀고 해 없음·유일해·복수해를 구분한다.
 
-        The visible trace permits at most one active assumption. At a logical
-        fixed point, candidates from every two-candidate cell are ranked by the
-        number of constraints made single by applying them directly. Equal
-        scores rotate previously stalled assumptions behind fresh ones, then
-        fall back to row-major cell and ascending value order. A contradictory
-        candidate is removed and normal logic resumes. A completed branch
-        supplies a valid representative solution; the later silent search
-        still checks whether another solution exists. If every branch stalls,
-        recursive MRV search runs silently and the trace marks the exact point
-        where the human-readable explanation ended.
-        """
+        표시하는 기록의 활성 가정은 최대 하나다. 논리 고정점에서는 모든 2후보 칸의
+        후보를 직접 적용해 단일 후보가 되는 제약 수(H1)로 정렬한다. 동점에서는
+        새 가정을 먼저 시도하고 정체된 가정을 순환한 뒤 행·열·값 오름차순을 따른다.
+        모순 후보는 제거하고 일반 논리로 돌아간다. 완성된 가정은 대표 해가 되지만
+        이후 조용한 탐색으로 다른 해도 확인한다. 모든 가정이 정체되면 재귀 MRV
+        탐색을 수행하고 기록에는 사람이 읽을 수 있는 설명이 끝난 지점을 표시한다."""
 
         steps: list[SolveStep] = []
 
@@ -208,7 +203,7 @@ class SudokuSolver:
         state: SolverState,
         steps: list[SolveStep],
     ) -> _StateSnapshot | None:
-        """Run fixed-point logic and sequential, non-nested bivalue probes."""
+        """고정점 논리와 중첩 없는 순차 2후보 가정을 실행한다."""
 
         probe_history = _ProbeHistory()
         while True:
@@ -235,7 +230,7 @@ class SudokuSolver:
         steps: list[SolveStep],
         history: _ProbeHistory,
     ) -> _ProbeResult:
-        """Try every current bivalue assumption in H1 order until one is decisive."""
+        """결론이 나올 때까지 현재 2후보 가정을 H1 순서로 시험한다."""
 
         grid = state.to_grid()
         candidates = state.candidate_grid()
@@ -277,7 +272,7 @@ class SudokuSolver:
         decision: Assignment,
         steps: list[SolveStep],
     ) -> _ProbeResult:
-        """Run ordinary logic under one assumption without nesting probes."""
+        """가정 하나 아래에서 추가 가정 없이 일반 논리를 실행한다."""
 
         row, col = decision.cell
         value = decision.value
@@ -359,7 +354,7 @@ class SudokuSolver:
         state: SolverState,
         solutions: list[_StateSnapshot],
     ) -> None:
-        """Recursively collect distinct solutions without adding trace steps."""
+        """풀이 기록을 추가하지 않고 재귀적으로 서로 다른 해를 수집한다."""
 
         if len(solutions) >= _SOLUTION_LIMIT:
             return
@@ -387,7 +382,7 @@ class SudokuSolver:
         assumption: Assignment | None,
         steps: list[SolveStep] | None,
     ) -> bool:
-        """Apply supported logical deductions to a fixed point or contradiction."""
+        """고정점이나 모순에 이를 때까지 지원하는 논리 추론을 적용한다."""
 
         while True:
             contradiction = state.find_contradiction()
@@ -438,7 +433,7 @@ class SudokuSolver:
 
     @staticmethod
     def _apply_deduction(state: SolverState, result: TechniqueResult) -> None:
-        """Apply one logical wave previously computed from the unchanged state."""
+        """변경 전 상태에서 계산한 논리 배치 하나를 적용한다."""
 
         if not result.has_changes:
             raise RuntimeError("변경이 없는 논리 기법 결과는 적용할 수 없습니다.")

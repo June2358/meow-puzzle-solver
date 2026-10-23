@@ -1,4 +1,4 @@
-"""Shared puzzle values used by the focused test suite."""
+"""핵심 회귀 테스트가 공유하는 퍼즐 값."""
 
 
 def grid_from_string(text: str) -> tuple[tuple[int, ...], ...]:

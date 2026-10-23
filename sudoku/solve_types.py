@@ -1,4 +1,4 @@
-"""Immutable value objects shared by the solver, techniques, and views."""
+"""솔버·기법·화면이 공유하는 불변 값 객체."""
 
 from dataclasses import dataclass
 from enum import StrEnum
@@ -10,7 +10,7 @@ type CandidateGrid = tuple[tuple[frozenset[int], ...], ...]
 
 
 class SolveStatus(StrEnum):
-    """The three meaningful outcomes for a structurally valid puzzle."""
+    """구조가 유효한 퍼즐의 세 가지 풀이 결과."""
 
     SOLVED_UNIQUE = "solved_unique"
     SOLVED_MULTIPLE = "solved_multiple"
@@ -18,7 +18,7 @@ class SolveStatus(StrEnum):
 
 
 class StepKind(StrEnum):
-    """Semantic categories consumed by the solve-trace view."""
+    """풀이 기록 화면에서 사용하는 단계 종류."""
 
     INITIAL_STATE = "initial_state"
     TECHNIQUE = "technique"
@@ -33,7 +33,7 @@ class StepKind(StrEnum):
 
 
 class Technique(StrEnum):
-    """Logical deductions currently implemented by the human-style solver."""
+    """사람식 솔버에 구현된 논리 추론 기법."""
 
     FULL_HOUSE = "full_house"
     NAKED_SINGLE = "naked_single"
@@ -50,7 +50,7 @@ class Technique(StrEnum):
 
 
 class ContradictionKind(StrEnum):
-    """Structured contradiction categories emitted by the solver state."""
+    """솔버 상태가 제공하는 구조화된 모순 종류."""
 
     EMPTY_CELL = "empty_cell"
     MISSING_DIGIT = "missing_digit"
@@ -58,7 +58,7 @@ class ContradictionKind(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Assignment:
-    """One value placed in one cell."""
+    """칸 하나에 확정한 값 하나."""
 
     cell: Cell
     value: int
@@ -66,7 +66,7 @@ class Assignment:
 
 @dataclass(frozen=True, slots=True)
 class Elimination:
-    """Candidate values removed from one cell by a logical deduction."""
+    """논리 추론으로 칸 하나에서 제거한 후보 값."""
 
     cell: Cell
     values: frozenset[int]
@@ -74,11 +74,10 @@ class Elimination:
 
 @dataclass(frozen=True, slots=True)
 class TechniqueResult:
-    """One unapplied logical wave derived from a single frozen state.
+    """고정된 상태 하나에서 도출한 미적용 논리 배치.
 
-    ``explanation`` contains reason prose only. Presentation targets must come
-    from ``assignments`` and ``eliminations`` so they cannot drift or repeat.
-    """
+    ``explanation``에는 이유만 담는다. 표시 대상은 ``assignments``와
+    ``eliminations``에서 가져와 설명과 효과가 어긋나거나 반복되지 않게 한다."""
 
     technique: Technique
     assignments: tuple[Assignment, ...] = ()
@@ -94,7 +93,7 @@ class TechniqueResult:
 
 @dataclass(frozen=True, slots=True)
 class ContradictionWitness:
-    """The stable cells, house, and digits that prove one contradiction."""
+    """모순 하나를 증명하는 고정된 칸·하우스·숫자."""
 
     kind: ContradictionKind
     cells: tuple[Cell, ...] = ()
@@ -104,7 +103,7 @@ class ContradictionWitness:
 
 @dataclass(frozen=True, slots=True)
 class SolveStep:
-    """One immutable trace item containing exactly one state snapshot."""
+    """상태 스냅샷 하나만 담는 불변 풀이 기록."""
 
     kind: StepKind
     grid: Grid
@@ -116,21 +115,21 @@ class SolveStep:
 
     @property
     def depth(self) -> int:
-        """Number of active assumptions; the human trace never exceeds one."""
+        """활성 가정 수이며, 사람식 풀이 기록에서는 1을 넘지 않는다."""
 
         return int(self.assumption is not None and self.kind is not StepKind.REFUTATION)
 
 
 @dataclass(frozen=True, slots=True)
 class SolveResult:
-    """Final outcome and immutable trace for one valid puzzle."""
+    """유효한 퍼즐 하나의 최종 결과와 불변 풀이 기록."""
 
     status: SolveStatus
     steps: tuple[SolveStep, ...]
 
     @property
     def solution(self) -> Grid | None:
-        """Return the representative solution, if one exists."""
+        """해가 있으면 대표 해를 반환한다."""
 
         if self.status is SolveStatus.UNSOLVABLE:
             return None

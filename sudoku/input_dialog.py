@@ -1,4 +1,4 @@
-"""Editable Sudoku input screen, including strict external-AI JSON paste."""
+"""외부 AI의 JSON을 엄격히 검사하는 편집 가능한 스도쿠 입력 화면."""
 
 from collections.abc import Callable, Iterable
 
@@ -65,7 +65,7 @@ _ERROR_MESSAGE_SPACING = 22
 
 
 class SudokuInputDialog:
-    """Collect and validate a puzzle before it enters the solver."""
+    """솔버에 전달할 퍼즐을 입력받고 검증한다."""
 
     def __init__(
         self,
@@ -202,7 +202,7 @@ class SudokuInputDialog:
         self.notice_message = None
 
     def _replace_board(self, grid: object) -> None:
-        """Atomically replace the editable draft after structural validation."""
+        """구조 검증 후 편집 중인 초안을 한 번에 교체한다."""
 
         normalized = validate_grid(grid)
         self.board = [list(row) for row in normalized]
@@ -445,7 +445,7 @@ class SudokuInputDialog:
         self._paste_matrix()
 
     def _paste_matrix(self) -> None:
-        """Read, fully parse, then atomically replace the draft board."""
+        """입력을 읽고 완전히 파싱한 뒤 초안 보드를 한 번에 교체한다."""
 
         try:
             text = paste_text()
@@ -454,7 +454,7 @@ class SudokuInputDialog:
             self._show_error(str(exc))
 
     def _load_matrix_text(self, text: str) -> None:
-        """Parse first, then atomically replace the draft with validated JSON."""
+        """JSON을 먼저 검증한 뒤 초안을 한 번에 교체한다."""
 
         grid = parse_matrix_json(text)
         self._replace_board(grid)

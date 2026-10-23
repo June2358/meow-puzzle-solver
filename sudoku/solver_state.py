@@ -1,4 +1,4 @@
-"""Mutable values and candidates used internally while solving."""
+"""풀이 내부에서 사용하는 가변 값과 후보."""
 
 from collections.abc import Iterable
 
@@ -35,7 +35,7 @@ def _validate_digits(values: object) -> frozenset[int]:
 
 
 class SolverState:
-    """Mutable Sudoku values and candidates with controlled state changes."""
+    """명시적인 상태 변경으로 관리하는 스도쿠 값과 후보."""
 
     __slots__ = ("_candidates", "_values")
 
@@ -89,7 +89,7 @@ class SolverState:
         )
 
     def set_value(self, cell: Cell, value: int) -> bool:
-        """Assign a candidate value and propagate it to all peers."""
+        """후보 값을 확정하고 모든 관련 칸에 전파한다."""
 
         row, col = _validate_cell(cell)
         value = _validate_digit(value)
@@ -107,7 +107,7 @@ class SolverState:
         return True
 
     def remove_candidates(self, cell: Cell, values: Iterable[int]) -> frozenset[int]:
-        """Remove candidates and return the values that actually changed."""
+        """후보를 제거하고 실제로 바뀐 값을 반환한다."""
 
         row, col = _validate_cell(cell)
         values_to_remove = _validate_digits(values)
@@ -122,7 +122,7 @@ class SolverState:
         return tuple((row, col) for row, col in CELLS if self._values[row][col] == 0)
 
     def find_contradiction(self) -> ContradictionWitness | None:
-        """Return the first contradiction in stable, simplest-first order."""
+        """쉬운 모순부터 고정 순서로 검사해 첫 모순을 반환한다."""
 
         for row, col in CELLS:
             if self._values[row][col] == 0 and not self._candidates[row][col]:

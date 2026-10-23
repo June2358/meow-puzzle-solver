@@ -1,4 +1,4 @@
-"""Validated built-in Sudoku presets."""
+"""검증된 내장 스도쿠 프리셋."""
 
 import json
 from collections.abc import Mapping
@@ -12,7 +12,7 @@ type PuzzleCatalog = Mapping[str, Grid]
 
 
 class PuzzleDataError(RuntimeError):
-    """Raised when the packaged preset catalog is missing or malformed."""
+    """패키지 프리셋 목록이 없거나 형식이 잘못되었을 때 발생한다."""
 
 
 def _validate_catalog(data: object) -> PuzzleCatalog:
@@ -42,7 +42,7 @@ def _validate_catalog(data: object) -> PuzzleCatalog:
 
 @cache
 def load_puzzle_catalog() -> PuzzleCatalog:
-    """Load and validate the packaged preset catalog once."""
+    """패키지 프리셋 목록을 한 번 읽고 검증한다."""
 
     try:
         text = (

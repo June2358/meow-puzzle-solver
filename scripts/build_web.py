@@ -1,4 +1,4 @@
-"""Stage the runtime-only app and produce a deployable Pygbag site."""
+"""런타임 파일만 준비하고 배포 가능한 Pygbag 웹 산출물을 만든다."""
 
 import os
 import shutil
@@ -14,7 +14,7 @@ WEB_OUTPUT = BUILD_ROOT / "web"
 
 
 def _clear_build_directory(path: Path) -> None:
-    """Remove one known build subtree without allowing broader deletion."""
+    """지정된 빌드 하위 디렉터리만 삭제하도록 범위를 검증한다."""
 
     resolved = path.resolve()
     if not resolved.is_relative_to(BUILD_ROOT.resolve()):
@@ -24,7 +24,7 @@ def _clear_build_directory(path: Path) -> None:
 
 
 def stage_runtime_files() -> None:
-    """Copy only files required by the browser runtime into the Pygbag app."""
+    """브라우저 런타임에 필요한 파일만 Pygbag 앱에 복사한다."""
 
     entry_point = PROJECT_ROOT / "main.py"
     package = PROJECT_ROOT / "sudoku"
@@ -44,7 +44,7 @@ def stage_runtime_files() -> None:
 
 
 def pygbag_command() -> list[str]:
-    """Return the pinned Pygbag build command for this application."""
+    """이 앱의 고정된 Pygbag 빌드 명령을 반환한다."""
 
     return [
         sys.executable,
@@ -66,14 +66,14 @@ def pygbag_command() -> list[str]:
         "--package",
         "io.github.june2358.simple_sudoku_solver",
         "--title",
-        "Sudoku Solver",
+        "스도쿠 솔버",
         "--build",
         str(STAGE_ROOT),
     ]
 
 
 def _validate_pygbag_output() -> None:
-    """Reject incomplete output before it can become a Pages artifact."""
+    """불완전한 산출물이 Pages 게시 대상이 되지 않도록 검사한다."""
 
     if not (PYGBAG_OUTPUT / "index.html").is_file():
         raise RuntimeError("Pygbag Web 산출물에 index.html이 없습니다.")
@@ -82,7 +82,7 @@ def _validate_pygbag_output() -> None:
 
 
 def build_web() -> None:
-    """Build the Pygbag application and copy only its deployable output."""
+    """Pygbag 앱을 빌드하고 배포 가능한 산출물만 복사한다."""
 
     stage_runtime_files()
     _clear_build_directory(WEB_OUTPUT)
@@ -98,7 +98,7 @@ def build_web() -> None:
 
     _validate_pygbag_output()
     shutil.copytree(PYGBAG_OUTPUT, WEB_OUTPUT)
-    print(f"Web build ready: {WEB_OUTPUT}")
+    print(f"웹 빌드 완료: {WEB_OUTPUT}")
 
 
 if __name__ == "__main__":

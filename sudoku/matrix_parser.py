@@ -1,4 +1,4 @@
-"""Strict parser for the external AI/OCR matrix contract."""
+"""외부 AI/OCR 행렬 계약을 엄격히 검사하는 파서."""
 
 import json
 
@@ -6,11 +6,11 @@ from .board import Grid, InvalidBoardError, validate_grid
 
 
 class MatrixParseError(ValueError):
-    """Raised when AI/OCR JSON is not one raw 9x9 integer matrix."""
+    """AI/OCR JSON이 단일 9×9 정수 행렬이 아닐 때 발생한다."""
 
 
 def parse_matrix_json(text: str) -> Grid:
-    """Parse a raw JSON 9x9 integer array without applying Sudoku rules."""
+    """스도쿠 규칙 적용 없이 JSON 9×9 정수 배열의 형식을 검사한다."""
 
     if not isinstance(text, str):
         raise TypeError("매트릭스 JSON은 str이어야 합니다.")

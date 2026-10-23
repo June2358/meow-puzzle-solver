@@ -1,4 +1,4 @@
-"""9x9 Sudoku topology shared by the model and solving techniques."""
+"""모델과 풀이 기법이 공유하는 9×9 스도쿠 칸 관계."""
 
 from types import MappingProxyType
 from typing import Final

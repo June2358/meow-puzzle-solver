@@ -14,8 +14,8 @@ from meow.model import Puzzle
 from meow.puzzle_catalog import load_preset
 from meow.solver import solve
 from meow.timeline import TimelineKind
-from meow.ui_style import RED
 from meow.visualizer import MeowVisualizer
+from puzzle_common.ui_style import RED
 
 MULTIPLE_GRID = (
     ("A", "B", "C", "D"),

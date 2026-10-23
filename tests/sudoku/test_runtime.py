@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-import meow.runtime as runtime
+import puzzle_common.runtime as runtime
 
 
 def test_next_frame_caps_cpu_and_yields_to_the_host(

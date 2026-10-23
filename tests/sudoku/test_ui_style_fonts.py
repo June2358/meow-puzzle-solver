@@ -4,7 +4,8 @@ from pathlib import Path
 import pygame
 import pytest
 
-from meow import ui_style
+from puzzle_common import ui_style as shared_style
+from sudoku import ui_style
 
 
 def _glyph_signature(
@@ -17,7 +18,10 @@ def _glyph_signature(
 def _source_characters() -> tuple[str, ...]:
     package = Path(ui_style.__file__).parent
     texts: list[str] = []
-    for path in package.rglob("*.py"):
+    for path in (
+        *package.rglob("*.py"),
+        *Path(shared_style.__file__).parent.rglob("*.py"),
+    ):
         tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
         texts.extend(
             node.value
@@ -38,7 +42,7 @@ def _source_characters() -> tuple[str, ...]:
 
 @pytest.mark.parametrize(
     "font_path",
-    (ui_style._REGULAR_FONT_PATH, ui_style._SEMIBOLD_FONT_PATH),
+    (shared_style._REGULAR_FONT_PATH, shared_style._SEMIBOLD_FONT_PATH),
 )
 def test_bundled_fonts_render_every_source_character(font_path: Path) -> None:
     pygame.font.init()
@@ -53,3 +57,35 @@ def test_bundled_fonts_render_every_source_character(font_path: Path) -> None:
     ]
 
     assert missing == []
+
+
+def test_get_fonts_use_real_pretendard_weights() -> None:
+    fonts = ui_style.get_fonts()
+    all_fonts = (
+        fonts.number,
+        fonts.body,
+        fonts.candidate,
+        fonts.button,
+        fonts.heading,
+        fonts.title,
+    )
+
+    assert {font.name for font in all_fonts} == {"Pretendard"}
+    assert fonts.body.style_name == "Regular"
+    assert fonts.candidate.style_name == "Regular"
+    assert fonts.number.style_name == "SemiBold"
+    assert fonts.button.style_name == "SemiBold"
+    assert fonts.heading.style_name == "SemiBold"
+    assert fonts.title.style_name == "SemiBold"
+    assert not any(font.get_bold() for font in all_fonts)
+    assert fonts.candidate.get_point_size() == 15
+
+
+def test_get_fonts_fails_when_a_bundled_asset_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(shared_style, "_REGULAR_FONT_PATH", tmp_path / "missing.otf")
+
+    with pytest.raises((FileNotFoundError, pygame.error)):
+        ui_style.get_fonts()

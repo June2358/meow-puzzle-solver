@@ -5,19 +5,10 @@ from typing import Final
 
 import pygame
 
-from .input_draft import IncompleteDraftError, RegionDraft
-from .matrix_input import (
-    VISION_REGION_PROMPT,
-    ClipboardError,
-    copy_text,
-    paste_text,
-)
-from .model import MAX_PUZZLE_SIZE, Cell, InvalidRegionMapError, Puzzle
-from .parser import PuzzleParseError, parse_puzzle_json
-from .puzzle_catalog import PRESET_NAMES, load_preset
-from .runtime import next_frame
-from .ui_components import Button
-from .ui_style import (
+from puzzle_common.clipboard import ClipboardError, copy_text, paste_text
+from puzzle_common.runtime import next_frame
+from puzzle_common.ui_components import Button
+from puzzle_common.ui_style import (
     ACCENT,
     ACCENT_YELLOW,
     ACCENT_YELLOW_LIGHT,
@@ -32,18 +23,25 @@ from .ui_style import (
     SURFACE_SUBTLE,
     WHITE,
     configure_display,
-    draw_region_grid_lines,
-    get_fonts,
-    region_palette,
     wrap_text,
 )
-from .web_text_dialog import (
+from puzzle_common.web_text_dialog import (
     WebTextDialog,
     WebTextDialogError,
     is_web_runtime,
-    open_json_dialog,
-    open_prompt_dialog,
 )
+
+from .input_draft import IncompleteDraftError, RegionDraft
+from .matrix_input import VISION_REGION_PROMPT
+from .model import MAX_PUZZLE_SIZE, Cell, InvalidRegionMapError, Puzzle
+from .parser import PuzzleParseError, parse_puzzle_json
+from .puzzle_catalog import PRESET_NAMES, load_preset
+from .ui_style import (
+    draw_region_grid_lines,
+    get_fonts,
+    region_palette,
+)
+from .web_text_dialog import open_json_dialog, open_prompt_dialog
 
 DEFAULT_DRAFT_SIZE: Final = 8
 MIN_DIRECT_SIZE: Final = 1

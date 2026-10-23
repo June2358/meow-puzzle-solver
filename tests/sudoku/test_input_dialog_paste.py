@@ -6,12 +6,12 @@ import pytest
 from sample_puzzles import UNIQUE_GRID
 
 import sudoku.input_dialog as input_dialog_module
-from sudoku.board import Puzzle, validate_grid
-from sudoku.input_dialog import SudokuInputDialog
-from sudoku.web_text_dialog import (
+from puzzle_common.web_text_dialog import (
     WebTextDialogError,
     WebTextDialogResult,
 )
+from sudoku.board import Puzzle, validate_grid
+from sudoku.input_dialog import SudokuInputDialog
 
 
 class FakeWebDialog:

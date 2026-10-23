@@ -5,9 +5,9 @@ from contextlib import suppress
 from dataclasses import dataclass
 from html import escape
 
-_OVERLAY_ID = "sudoku-text-dialog-overlay"
-_TEXTAREA_ID = "sudoku-text-dialog-textarea"
-_ERROR_ID = "sudoku-text-dialog-error"
+_OVERLAY_ID = "puzzle-text-dialog-overlay"
+_TEXTAREA_ID = "puzzle-text-dialog-textarea"
+_ERROR_ID = "puzzle-text-dialog-error"
 
 
 class WebTextDialogError(RuntimeError):
@@ -107,7 +107,7 @@ class WebTextDialog:
         card = self._document.createElement("section")
         card.setAttribute("role", "dialog")
         card.setAttribute("aria-modal", "true")
-        card.setAttribute("aria-labelledby", "sudoku-text-dialog-title")
+        card.setAttribute("aria-labelledby", "puzzle-text-dialog-title")
         card.style.cssText = (
             "box-sizing:border-box;width:min(640px,100%);max-height:calc(100vh - 32px);"
             "max-height:calc(100dvh - 32px);overflow:auto;background:#fff;"
@@ -116,7 +116,7 @@ class WebTextDialog:
         )
 
         heading = self._document.createElement("h2")
-        heading.id = "sudoku-text-dialog-title"
+        heading.id = "puzzle-text-dialog-title"
         _set_dom_text(heading, title)
         heading.style.cssText = (
             "margin:0;color:#172554;font:700 22px/1.3 system-ui,sans-serif;"
@@ -134,11 +134,11 @@ class WebTextDialog:
         self._textarea = textarea
         textarea.id = _TEXTAREA_ID
         textarea.rows = 12
-        textarea.value = text
+        _set_dom_text(textarea, text)
         textarea.autocapitalize = "off"
         textarea.autocomplete = "off"
         textarea.spellcheck = False
-        textarea.setAttribute("aria-labelledby", "sudoku-text-dialog-title")
+        textarea.setAttribute("aria-labelledby", "puzzle-text-dialog-title")
         textarea.style.cssText = (
             "box-sizing:border-box;width:100%;min-height:min(46vh,360px);"
             "max-height:55vh;border:1px solid #94a3b8;border-radius:9px;"
@@ -165,8 +165,7 @@ class WebTextDialog:
         controls.style.cssText = (
             "display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;"
         )
-        cancel = self._button("닫기" if not editable else "취소", "cancel")
-        controls.appendChild(cancel)
+        controls.appendChild(self._button("닫기" if not editable else "취소", "cancel"))
         if editable:
             controls.appendChild(self._button("불러오기", "submit", primary=True))
         card.appendChild(controls)
@@ -252,13 +251,10 @@ class WebTextDialog:
             self._focus_canvas()
 
     def _focus_canvas(self) -> None:
-        try:
+        with suppress(Exception):
             canvas = self._document.querySelector("canvas")
             if canvas is not None:
                 canvas.focus()
-        except Exception:
-            # Focus restoration is a convenience after the overlay is already gone.
-            pass
 
     def _remove_partial_overlay(self) -> None:
         overlay = self._overlay
@@ -269,25 +265,3 @@ class WebTextDialog:
             return
         with suppress(Exception):
             overlay.remove()
-
-
-def open_json_dialog() -> WebTextDialog:
-    """Open an editable textarea for user-driven JSON paste."""
-
-    return WebTextDialog(
-        title="JSON 입력",
-        description="복사한 9×9 JSON을 아래 칸에 붙여넣고 불러오기를 누르세요.",
-        text="",
-        editable=True,
-    )
-
-
-def open_prompt_dialog(text: str) -> WebTextDialog:
-    """Show selectable read-only prompt text without Clipboard API access."""
-
-    return WebTextDialog(
-        title="OCR 프롬프트",
-        description="아래 텍스트를 선택한 뒤 브라우저의 시스템 복사를 사용하세요.",
-        text=text,
-        editable=False,
-    )

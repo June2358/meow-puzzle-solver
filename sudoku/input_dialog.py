@@ -4,24 +4,10 @@ from collections.abc import Callable, Iterable
 
 import pygame
 
-from .board import (
-    InvalidBoardError,
-    Puzzle,
-    find_conflicting_cells,
-    validate_grid,
-)
-from .matrix_input import (
-    OCR_MATRIX_PROMPT,
-    ClipboardError,
-    copy_text,
-    paste_text,
-)
-from .matrix_parser import MatrixParseError, parse_matrix_json
-from .puzzle_catalog import load_puzzle_catalog
-from .runtime import next_frame
-from .topology import SIZE, Cell
-from .ui_components import Button
-from .ui_style import (
+from puzzle_common.clipboard import ClipboardError, copy_text, paste_text
+from puzzle_common.runtime import next_frame
+from puzzle_common.ui_components import Button
+from puzzle_common.ui_style import (
     ACCENT,
     ACCENT_YELLOW,
     ACCENT_YELLOW_LIGHT,
@@ -36,18 +22,30 @@ from .ui_style import (
     SURFACE_SUBTLE,
     WHITE,
     configure_display,
-    draw_conflict_cells,
-    draw_sudoku_grid_lines,
-    get_fonts,
     wrap_text,
 )
-from .web_text_dialog import (
+from puzzle_common.web_text_dialog import (
     WebTextDialog,
     WebTextDialogError,
     is_web_runtime,
-    open_json_dialog,
-    open_prompt_dialog,
 )
+
+from .board import (
+    InvalidBoardError,
+    Puzzle,
+    find_conflicting_cells,
+    validate_grid,
+)
+from .matrix_input import OCR_MATRIX_PROMPT
+from .matrix_parser import MatrixParseError, parse_matrix_json
+from .puzzle_catalog import load_puzzle_catalog
+from .topology import SIZE, Cell
+from .ui_style import (
+    draw_conflict_cells,
+    draw_sudoku_grid_lines,
+    get_fonts,
+)
+from .web_text_dialog import open_json_dialog, open_prompt_dialog
 
 _CELL_SIZE = 60
 _MARGIN = 45

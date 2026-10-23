@@ -1,7 +1,7 @@
 [project]
-name = "meow-solver"
+name = "puzzle-solvers"
 version = "0.1.0"
-description = "Cat-themed 1-star Star Battle (Queens-style) solver and visualizer"
+description = "MEOW Queens and Sudoku solvers with shared pygame infrastructure"
 authors = [{ name = "Lim Junmin", email = "dsgoat99@naver.com" }]
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -23,7 +23,8 @@ package = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-W error"
+addopts = "-W error --import-mode=importlib"
+pythonpath = [".", "tests/sudoku"]
 
 [tool.ruff]
 target-version = "py312"

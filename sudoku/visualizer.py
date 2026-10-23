@@ -4,19 +4,9 @@ from collections.abc import Iterable
 
 import pygame
 
-from .board import Grid, Puzzle
-from .runtime import next_frame
-from .solve_types import (
-    SolveResult,
-    SolveStatus,
-    SolveStep,
-    StepKind,
-    Technique,
-    TechniqueResult,
-)
-from .topology import SIZE, UNITS, Cell
-from .ui_components import Button
-from .ui_style import (
+from puzzle_common.runtime import next_frame
+from puzzle_common.ui_components import Button
+from puzzle_common.ui_style import (
     ACCENT,
     ACCENT_YELLOW,
     BLACK,
@@ -30,9 +20,22 @@ from .ui_style import (
     RED,
     WHITE,
     configure_display,
+    wrap_text,
+)
+
+from .board import Grid, Puzzle
+from .solve_types import (
+    SolveResult,
+    SolveStatus,
+    SolveStep,
+    StepKind,
+    Technique,
+    TechniqueResult,
+)
+from .topology import SIZE, UNITS, Cell
+from .ui_style import (
     draw_sudoku_grid_lines,
     get_fonts,
-    wrap_text,
 )
 
 _STEP_LABELS: dict[StepKind, str] = {

@@ -14,7 +14,7 @@ import pytest
 import meow.input_dialog as input_dialog_module
 from meow.input_dialog import MeowInputDialog
 from meow.puzzle_catalog import load_preset
-from meow.web_text_dialog import WebTextDialogResult
+from puzzle_common.web_text_dialog import WebTextDialogResult
 
 
 class FakeWebDialog:

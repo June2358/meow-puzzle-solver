@@ -4,7 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 
-import meow.web_text_dialog as web_text_dialog
+import puzzle_common.web_text_dialog as web_text_dialog
+from sudoku.web_text_dialog import open_json_dialog, open_prompt_dialog
 
 
 class FakeElement:
@@ -22,6 +23,8 @@ class FakeElement:
         self.value = ""
         self.hidden = False
         self.removed = False
+        self.focus_calls = 0
+        self.select_calls = 0
 
     @property
     def innerHTML(self) -> str:
@@ -48,10 +51,11 @@ class FakeElement:
         self.removed = True
 
     def focus(self) -> None:
+        self.focus_calls += 1
         self.document.activeElement = self
 
     def select(self) -> None:
-        pass
+        self.select_calls += 1
 
     def descendants(self):  # noqa: ANN201
         yield self
@@ -95,51 +99,91 @@ def _find_by_text(document: FakeDocument, text: str) -> FakeElement | None:
     )
 
 
-def test_json_dialog_returns_exact_json_and_stays_open_for_validation(
+def test_json_dialog_returns_exact_pretty_json_and_stays_open_for_validation(
     document: FakeDocument,
 ) -> None:
-    dialog = web_text_dialog.open_json_dialog()
+    dialog = open_json_dialog()
     overlay = document.getElementById(web_text_dialog._OVERLAY_ID)
     textarea = document.getElementById(web_text_dialog._TEXTAREA_ID)
     error = document.getElementById(web_text_dialog._ERROR_ID)
     load_button = _find_by_text(document, "불러오기")
-    region_json = json.dumps(
-        {
-            "regions": [
-                ["A", "A", "B"],
-                ["C", "B", "B"],
-                ["C", "C", "B"],
-            ]
-        },
-        indent=2,
-    )
+    pretty_json = json.dumps([[0] * 9 for _ in range(9)], indent=2)
 
     assert overlay is not None
     assert textarea is not None
     assert error is not None
     assert load_button is not None
+    assert (
+        _find_by_text(
+            document,
+            "복사한 9×9 JSON을 아래 칸에 붙여넣고 불러오기를 누르세요.",
+        )
+        is not None
+    )
+    assert textarea.focus_calls == 1
+    assert "font:16px" in textarea.style.cssText
+    assert "safe-area-inset" in overlay.style.cssText
+    assert "min-height:48px" in load_button.style.cssText
 
-    textarea.value = region_json
+    textarea.value = pretty_json
     overlay.dataset.action = "submit"
 
     result = dialog.poll()
 
     assert result == web_text_dialog.WebTextDialogResult(
         submitted=True,
-        text=region_json,
+        text=pretty_json,
     )
     assert dialog.poll() is None
     assert not overlay.removed
 
     dialog.show_error("JSON 형식 오류")
 
-    assert textarea.value == region_json
+    assert textarea.value == pretty_json
+    assert textarea.focus_calls == 2
     assert error.textContent == "JSON 형식 오류"
     assert error.hidden is False
 
     dialog.close()
 
     assert overlay.removed
+    assert document.canvas.focus_calls == 1
+
+
+def test_prompt_dialog_is_read_only_selected_and_cancel_removes_it(
+    document: FakeDocument,
+) -> None:
+    prompt = "스도쿠 전사 <>&\nReturn JSON only."
+    dialog = open_prompt_dialog(prompt)
+    overlay = document.getElementById(web_text_dialog._OVERLAY_ID)
+    textarea = document.getElementById(web_text_dialog._TEXTAREA_ID)
+
+    assert overlay is not None
+    assert textarea is not None
+    assert textarea.value == prompt
+    assert textarea.innerHTML.isascii()
+    assert unescape(textarea.innerHTML) == prompt
+    assert "readonly" in textarea.attributes
+    assert textarea.focus_calls == 1
+    assert textarea.select_calls == 1
+    assert _find_by_text(document, "불러오기") is None
+    assert _find_by_text(document, "OCR 프롬프트") is not None
+
+    overlay.dataset.action = "cancel"
+
+    assert dialog.poll() == web_text_dialog.WebTextDialogResult(submitted=False)
+    assert overlay.removed
+    assert document.canvas.focus_calls == 1
+
+
+def test_web_runtime_detection_is_strictly_emscripten(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(web_text_dialog.sys, "platform", "win32")
+    assert not web_text_dialog.is_web_runtime()
+
+    monkeypatch.setattr(web_text_dialog.sys, "platform", "emscripten")
+    assert web_text_dialog.is_web_runtime()
 
 
 def test_dom_ui_text_is_ascii_only_and_html_safe(document: FakeDocument) -> None:

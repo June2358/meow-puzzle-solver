@@ -6,7 +6,7 @@ from typing import Protocol
 
 import pygame
 
-from .presentation import Outcome, PlaybackData
+from .engine import Outcome, SolveResult
 
 UNSOLVABLE_MESSAGE = (
     "현재 입력으로 가능한 해가 없습니다. 원본 문제와 입력을 확인하세요."
@@ -18,17 +18,17 @@ class Screen[T](Protocol):
 
 
 @dataclass(frozen=True, slots=True)
-class PuzzlePlugin[Puzzle, Draft, Frame]:
+class PuzzlePlugin[Puzzle, Draft, Result: SolveResult]:
     """Register a puzzle's screens, solver and draft using one app contract."""
 
     create_editor: Callable[[Draft | None, str | None], Screen[Puzzle]]
-    solve: Callable[[Puzzle], PlaybackData[Frame]]
-    create_player: Callable[[Puzzle, PlaybackData[Frame]], Screen[Draft]]
+    solve: Callable[[Puzzle], Result]
+    create_player: Callable[[Puzzle, Result], Screen[Draft]]
     get_draft: Callable[[Puzzle], Draft]
 
 
-async def run_app[Puzzle, Draft, Frame](
-    plugin: PuzzlePlugin[Puzzle, Draft, Frame],
+async def run_app[Puzzle, Draft, Result: SolveResult](
+    plugin: PuzzlePlugin[Puzzle, Draft, Result],
 ) -> None:
     pygame.init()
     draft: Draft | None = None

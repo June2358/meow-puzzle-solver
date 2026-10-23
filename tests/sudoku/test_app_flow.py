@@ -7,42 +7,18 @@ from sample_puzzles import UNIQUE_GRID, UNIQUE_SOLUTION
 
 import puzzle_common.app as shared_app
 import sudoku.app as app_module
+from puzzle_common.engine import LogicRun, LogicStatus, Outcome, SolveResult, SolveRun
 from sudoku.board import Puzzle
-from sudoku.presentation import to_playback
-from sudoku.solve_types import SolveResult, SolveStatus, SolveStep, StepKind
+from sudoku.solver_state import SolverState
 
 
-def result_with_status(puzzle: Puzzle, status: SolveStatus) -> SolveResult:
-    def candidates(grid):
-        return tuple(
-            tuple(
-                frozenset({value}) if value else frozenset(range(1, 10))
-                for value in row
-            )
-            for row in grid
-        )
-
-    terminal_grid = (
-        UNIQUE_SOLUTION if status is not SolveStatus.UNSOLVABLE else puzzle.grid
-    )
-    terminal_kind = (
-        StepKind.UNSOLVABLE if status is SolveStatus.UNSOLVABLE else StepKind.SOLVED
-    )
-    return SolveResult(
-        status=status,
-        steps=(
-            SolveStep(
-                kind=StepKind.INITIAL_STATE,
-                grid=puzzle.grid,
-                candidates=candidates(puzzle.grid),
-            ),
-            SolveStep(
-                kind=terminal_kind,
-                grid=terminal_grid,
-                candidates=candidates(terminal_grid),
-            ),
-        ),
-    )
+def result_with_status(puzzle: Puzzle, outcome: Outcome) -> SolveResult:
+    initial = SolverState(puzzle).snapshot()
+    solution = SolverState(Puzzle(UNIQUE_SOLUTION)).snapshot()
+    logic = LogicRun(LogicStatus.STALLED, initial, initial, ())
+    solutions = () if outcome is Outcome.UNSOLVABLE else (solution,)
+    run = SolveRun(logic, (), solutions, False)
+    return SolveResult(outcome, run)
 
 
 def test_unsolvable_result_returns_to_editor_with_specific_message(
@@ -68,7 +44,7 @@ def test_unsolvable_result_returns_to_editor_with_specific_message(
             assert received is puzzle
 
         def solve(self) -> SolveResult:
-            return result_with_status(puzzle, SolveStatus.UNSOLVABLE)
+            return result_with_status(puzzle, Outcome.UNSOLVABLE)
 
     class ForbiddenVisualizer:
         def __init__(self, *args: object, **kwargs: object) -> None:
@@ -77,7 +53,7 @@ def test_unsolvable_result_returns_to_editor_with_specific_message(
     plugin = replace(
         app_module.PLUGIN,
         create_editor=FakeDialog,
-        solve=lambda puzzle: to_playback(FakeSolver(puzzle).solve()),
+        solve=lambda puzzle: FakeSolver(puzzle).solve(),
         create_player=ForbiddenVisualizer,
     )
     monkeypatch.setattr(shared_app.pygame, "init", lambda: None)
@@ -111,7 +87,7 @@ def test_solved_result_opens_visualizer_and_edit_returns_same_draft(
         async def run(self) -> Puzzle | None:
             return next(dialog_results)
 
-    solved_result = result_with_status(puzzle, SolveStatus.SOLVED_MULTIPLE)
+    solved_result = result_with_status(puzzle, Outcome.MULTIPLE)
 
     class FakeSolver:
         def __init__(self, received: Puzzle) -> None:
@@ -130,7 +106,7 @@ def test_solved_result_opens_visualizer_and_edit_returns_same_draft(
     plugin = replace(
         app_module.PLUGIN,
         create_editor=FakeDialog,
-        solve=lambda puzzle: to_playback(FakeSolver(puzzle).solve()),
+        solve=lambda puzzle: FakeSolver(puzzle).solve(),
         create_player=FakeVisualizer,
     )
     monkeypatch.setattr(shared_app.pygame, "init", lambda: None)
@@ -140,7 +116,7 @@ def test_solved_result_opens_visualizer_and_edit_returns_same_draft(
     asyncio.run(shared_app.run_app(plugin))
 
     assert len(visualizer_calls) == 1
-    assert visualizer_calls[0] == (puzzle, to_playback(solved_result))
+    assert visualizer_calls[0] == (puzzle, solved_result)
     assert dialog_calls[1]["initial_board"] == puzzle.grid
     assert dialog_calls[1]["initial_error"] is None
     assert quit_calls == [None]

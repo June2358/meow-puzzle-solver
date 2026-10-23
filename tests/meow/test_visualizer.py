@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from dataclasses import replace
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
@@ -11,11 +12,12 @@ import pygame
 import pytest
 
 from meow.model import Puzzle
-from meow.presentation import to_playback
 from meow.puzzle_catalog import load_preset
+from meow.solve_types import UnitKind
 from meow.solver import solve
-from meow.timeline import TimelineKind
 from meow.visualizer import MeowVisualizer
+from puzzle_common.engine import SolveResult
+from puzzle_common.presentation import FrameKind
 from puzzle_common.ui_style import RED
 
 MULTIPLE_GRID = (
@@ -40,14 +42,14 @@ def pygame_dummy_display():
 
 def test_core_frames_render(stalled_probe_puzzle: Puzzle) -> None:
     puzzle = stalled_probe_puzzle
-    visualizer = MeowVisualizer(puzzle, to_playback(solve(puzzle)))
+    visualizer = MeowVisualizer(puzzle, solve(puzzle))
     core_kinds = (
-        TimelineKind.LOGIC_STEP,
-        TimelineKind.PROBE_START,
-        TimelineKind.PROBE_END,
-        TimelineKind.RESTORE,
-        TimelineKind.BACKTRACK_SEARCH,
-        TimelineKind.FINAL,
+        FrameKind.DEDUCTION,
+        FrameKind.PROBE_START,
+        FrameKind.PROBE_END,
+        FrameKind.RESTORE,
+        FrameKind.SEARCH,
+        FrameKind.FINAL,
     )
 
     for kind in core_kinds:
@@ -55,14 +57,14 @@ def test_core_frames_render(stalled_probe_puzzle: Puzzle) -> None:
             index for index, frame in enumerate(visualizer.frames) if frame.kind is kind
         )
         visualizer.draw()
-        if kind is TimelineKind.PROBE_START:
+        if kind is FrameKind.PROBE_START:
             assert visualizer.current_frame.active_assumption is not None
-            assert visualizer._effect_groups(visualizer.current_frame) == ()
+            assert visualizer._presentation(visualizer.current_frame).effects == ()
 
     visualizer.current_step_index = next(
         index
         for index, frame in enumerate(visualizer.frames)
-        if frame.kind is TimelineKind.LOGIC_STEP and frame.active_assumption is not None
+        if frame.kind is FrameKind.DEDUCTION and frame.active_assumption is not None
     )
     visualizer.draw()
     details = visualizer._presentation(visualizer.current_frame)
@@ -72,7 +74,7 @@ def test_core_frames_render(stalled_probe_puzzle: Puzzle) -> None:
 
 def test_presentation_keeps_structured_effects_and_reason() -> None:
     puzzle = load_preset("쉬움")
-    visualizer = MeowVisualizer(puzzle, to_playback(solve(puzzle)))
+    visualizer = MeowVisualizer(puzzle, solve(puzzle))
     visualizer.current_step_index = 1
 
     details = visualizer._presentation(visualizer.current_frame)
@@ -92,7 +94,7 @@ def test_all_exact_results_render_a_final_badge() -> None:
 
     for grid, badge in cases:
         puzzle = load_preset("쉬움") if grid is None else Puzzle.from_region_grid(grid)
-        visualizer = MeowVisualizer(puzzle, to_playback(solve(puzzle)))
+        visualizer = MeowVisualizer(puzzle, solve(puzzle))
         visualizer.current_step_index = len(visualizer.frames) - 1
 
         visualizer.draw()
@@ -102,13 +104,13 @@ def test_all_exact_results_render_a_final_badge() -> None:
 
 def test_new_exclusion_preserves_region_color_and_uses_red_x() -> None:
     puzzle = load_preset("쉬움")
-    visualizer = MeowVisualizer(puzzle, to_playback(solve(puzzle)))
+    visualizer = MeowVisualizer(puzzle, solve(puzzle))
     visualizer.current_step_index = next(
         index
         for index, frame in enumerate(visualizer.frames)
-        if frame.logic_step is not None and frame.logic_step.deduction.exclusions
+        if frame.deduction is not None and frame.deduction.exclusions
     )
-    deduction = visualizer.current_frame.logic_step.deduction
+    deduction = visualizer.current_frame.deduction
     cell = deduction.exclusions[0]
     rect = visualizer.layout.cell_rect(cell)
 
@@ -127,11 +129,19 @@ def test_new_exclusion_preserves_region_color_and_uses_red_x() -> None:
 
 def test_related_region_chip_uses_the_board_region_color() -> None:
     puzzle = load_preset("쉬움")
-    visualizer = MeowVisualizer(puzzle, to_playback(solve(puzzle)))
+    visualizer = MeowVisualizer(puzzle, solve(puzzle))
     visualizer.current_step_index = next(
-        index for index, frame in enumerate(visualizer.frames) if frame.region_indices
+        index
+        for index, frame in enumerate(visualizer.frames)
+        if frame.deduction is not None
+        and frame.deduction.evidence_units
+        and any(ref.kind is UnitKind.REGION for ref in frame.deduction.evidence_units)
     )
-    region_index = visualizer.current_frame.region_indices[0]
+    region_index = next(
+        ref.index
+        for ref in visualizer.current_frame.deduction.evidence_units
+        if ref.kind is UnitKind.REGION
+    )
     expected = visualizer.region_colors[puzzle.region_labels[region_index]]
 
     x, y = 10, 10
@@ -153,7 +163,7 @@ def test_escape_returns_the_region_grid(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     puzzle = load_preset("쉬움")
-    visualizer = MeowVisualizer(puzzle, to_playback(solve(puzzle)))
+    visualizer = MeowVisualizer(puzzle, solve(puzzle))
 
     async def advance_frame(clock: pygame.time.Clock) -> float:
         await asyncio.sleep(0)
@@ -170,3 +180,21 @@ def test_escape_returns_the_region_grid(
     )
 
     assert asyncio.run(visualizer.run()) == puzzle.region_grid
+
+
+@pytest.mark.parametrize("foreign_snapshot", (False, True))
+def test_invalid_final_snapshot_is_rejected_before_display_configuration(
+    monkeypatch, foreign_snapshot
+):
+    puzzle = load_preset("쉬움")
+    result = solve(puzzle)
+    final = solve(load_preset("보통")).solution if foreign_snapshot else object()
+    invalid = SolveResult(result.outcome, replace(result.run, solutions=(final,)))
+
+    def forbidden_display(*args):
+        pytest.fail("잘못된 풀이 결과는 디스플레이를 바꾸기 전에 거부해야 합니다.")
+
+    monkeypatch.setattr("puzzle_common.playback.configure_display", forbidden_display)
+
+    with pytest.raises(ValueError if foreign_snapshot else TypeError):
+        MeowVisualizer(puzzle, invalid)

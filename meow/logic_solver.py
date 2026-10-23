@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from puzzle_common.engine import Engine
+from puzzle_common.engine import Engine, LogicRun
 
-from .engine_adapter import MeowDomain, logic_result_from
+from .engine_adapter import MeowDomain
 from .model import Puzzle
-from .solve_types import LogicResult
 from .state import LogicState
 
 
@@ -16,7 +15,7 @@ class LogicSolver:
     def __init__(self, puzzle: Puzzle) -> None:
         self.puzzle = puzzle
 
-    def solve(self, initial_state: LogicState | None = None) -> LogicResult:
+    def solve(self, initial_state: LogicState | None = None) -> LogicRun:
         """논리 기법이 더는 없거나 완성/모순에 이를 때까지 진행한다.
 
         전달받은 ``initial_state``는 clone해서 사용하므로 호출자의 상태도
@@ -30,13 +29,13 @@ class LogicSolver:
                 raise ValueError("initial_state는 같은 퍼즐에 속해야 합니다.")
             state = initial_state.clone()
 
-        return logic_result_from(Engine(MeowDomain()).propagate(state))
+        return Engine(MeowDomain()).propagate(state)
 
 
 def solve_logically(
     puzzle: Puzzle,
     initial_state: LogicState | None = None,
-) -> LogicResult:
+) -> LogicRun:
     """한 번의 논리 풀이를 위한 간단한 공개 진입점."""
 
     return LogicSolver(puzzle).solve(initial_state)

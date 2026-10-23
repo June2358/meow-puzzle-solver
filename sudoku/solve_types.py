@@ -3,33 +3,9 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
-from .board import Grid
 from .topology import Cell
 
 type CandidateGrid = tuple[tuple[frozenset[int], ...], ...]
-
-
-class SolveStatus(StrEnum):
-    """The three meaningful outcomes for a structurally valid puzzle."""
-
-    SOLVED_UNIQUE = "solved_unique"
-    SOLVED_MULTIPLE = "solved_multiple"
-    UNSOLVABLE = "unsolvable"
-
-
-class StepKind(StrEnum):
-    """Semantic categories consumed by the solve-trace view."""
-
-    INITIAL_STATE = "initial_state"
-    TECHNIQUE = "technique"
-    ASSUMPTION = "assumption"
-    ASSUMPTION_STALLED = "assumption_stalled"
-    ASSUMPTION_SOLVED = "assumption_solved"
-    CONTRADICTION = "contradiction"
-    REFUTATION = "refutation"
-    SEARCH_FALLBACK = "search_fallback"
-    SOLVED = "solved"
-    UNSOLVABLE = "unsolvable"
 
 
 class Technique(StrEnum):
@@ -100,38 +76,3 @@ class ContradictionWitness:
     cells: tuple[Cell, ...] = ()
     unit_index: int | None = None
     digits: frozenset[int] = frozenset()
-
-
-@dataclass(frozen=True, slots=True)
-class SolveStep:
-    """One immutable trace item containing exactly one state snapshot."""
-
-    kind: StepKind
-    grid: Grid
-    candidates: CandidateGrid
-    deduction: TechniqueResult | None = None
-    assumption: Assignment | None = None
-    contradiction: ContradictionWitness | None = None
-    message: str = ""
-
-    @property
-    def depth(self) -> int:
-        """Number of active assumptions; the human trace never exceeds one."""
-
-        return int(self.assumption is not None and self.kind is not StepKind.REFUTATION)
-
-
-@dataclass(frozen=True, slots=True)
-class SolveResult:
-    """Final outcome and immutable trace for one valid puzzle."""
-
-    status: SolveStatus
-    steps: tuple[SolveStep, ...]
-
-    @property
-    def solution(self) -> Grid | None:
-        """Return the representative solution, if one exists."""
-
-        if self.status is SolveStatus.UNSOLVABLE:
-            return None
-        return self.steps[-1].grid

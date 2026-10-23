@@ -3,13 +3,13 @@ from __future__ import annotations
 from itertools import combinations
 
 from meow.engine_adapter import _rank_probe_candidates
-from meow.exact_solver import ExactStatus
 from meow.logic_solver import solve_logically
 from meow.model import Puzzle
 from meow.puzzle_catalog import load_preset
-from meow.solve_types import LogicStatus, Technique
-from meow.solver import SolveOutcome, solve
-from meow.state import LogicState
+from meow.solve_types import Technique
+from meow.solver import solve
+from meow.state import LogicSnapshot, LogicState
+from puzzle_common.engine import LogicStatus, Outcome
 
 
 def _puzzle(*rows: str) -> Puzzle:
@@ -48,11 +48,11 @@ BACKTRACK_SEARCH_UNSOLVABLE = _puzzle(
 
 def _is_valid_solution(
     puzzle: Puzzle,
-    solution: tuple[tuple[int, int], ...] | None,
+    solution: LogicSnapshot | None,
 ) -> bool:
     if solution is None:
         return False
-    cells = set(solution)
+    cells = solution.cats
     return (
         len(cells) == puzzle.size
         and {row for row, _ in cells} == set(range(puzzle.size))
@@ -68,24 +68,22 @@ def _is_valid_solution(
 def test_probing_solves_after_deterministic_logic_stalls() -> None:
     result = solve(PROBING_UNIQUE)
 
-    assert result.initial_logic_result.status is LogicStatus.STALLED
-    assert result.exact_result.status is ExactStatus.UNIQUE
-    assert result.outcome is SolveOutcome.SOLVED_WITH_PROBING
-    assert result.probing_rounds
-    assert not result.used_backtrack_search
+    assert result.run.initial_logic_result.status is LogicStatus.STALLED
+    assert result.outcome is Outcome.UNIQUE
+    assert result.run.probing_rounds
+    assert not result.run.used_backtrack_search
     assert _is_valid_solution(PROBING_UNIQUE, result.solution)
 
 
 def test_no_ranked_probe_candidate_switches_to_backtrack_search() -> None:
     result = solve(BACKTRACK_SEARCH_MULTIPLE)
 
-    assert result.initial_logic_result.status is LogicStatus.STALLED
-    assert result.exact_result.status is ExactStatus.MULTIPLE
-    assert result.outcome is SolveOutcome.SOLVED_WITH_BACKTRACK_SEARCH
-    assert result.used_backtrack_search
-    assert result.probing_rounds[-1].candidates == ()
-    assert result.probing_rounds[-1].probes == ()
-    assert result.probing_rounds[-1].stalled
+    assert result.run.initial_logic_result.status is LogicStatus.STALLED
+    assert result.outcome is Outcome.MULTIPLE
+    assert result.run.used_backtrack_search
+    assert result.run.probing_rounds[-1].candidates == ()
+    assert result.run.probing_rounds[-1].probes == ()
+    assert result.run.probing_rounds[-1].elimination is None
     assert _is_valid_solution(BACKTRACK_SEARCH_MULTIPLE, result.solution)
 
 
@@ -93,40 +91,40 @@ def test_stalled_ranked_probes_switch_to_backtrack_search(
     stalled_probe_puzzle: Puzzle,
 ) -> None:
     result = solve(stalled_probe_puzzle)
-    round_ = result.probing_rounds[-1]
+    round_ = result.run.probing_rounds[-1]
 
-    assert result.exact_result.status is ExactStatus.MULTIPLE
-    assert result.outcome is SolveOutcome.SOLVED_WITH_BACKTRACK_SEARCH
+    assert result.outcome is Outcome.MULTIPLE
+    assert result.run.used_backtrack_search
     assert round_.candidates
     assert round_.probes
-    assert all(probe.status is LogicStatus.STALLED for probe in round_.probes)
-    assert round_.stalled
+    assert all(
+        probe.logic_result.status is LogicStatus.STALLED for probe in round_.probes
+    )
+    assert round_.elimination is None
+    assert len(round_.probes) == len(round_.candidates)
     assert _is_valid_solution(stalled_probe_puzzle, result.solution)
 
 
 def test_multiple_puzzle_returns_one_valid_solution() -> None:
     result = solve(MULTIPLE)
 
-    assert result.exact_result.status is ExactStatus.MULTIPLE
+    assert result.outcome is Outcome.MULTIPLE
     assert _is_valid_solution(MULTIPLE, result.solution)
-    assert result.outcome is SolveOutcome.SOLVED_WITH_PROBING
-    assert not result.used_backtrack_search
-    round_ = result.probing_rounds[-1]
+    assert result.run.probing_rounds
+    assert not result.run.used_backtrack_search
+    round_ = result.run.probing_rounds[-1]
     assert round_.elimination is None
-    assert round_.probes[-1].status is LogicStatus.SOLVED_LOGICALLY
-    assert result.solution == tuple(
-        sorted(round_.probes[-1].logic_result.final_state.cats)
-    )
+    assert round_.probes[-1].logic_result.status is LogicStatus.SOLVED
+    assert result.solution is round_.probes[-1].logic_result.final_state
 
 
 def test_unsolvable_puzzle_returns_no_solution() -> None:
     result = solve(BACKTRACK_SEARCH_UNSOLVABLE)
 
-    assert result.exact_result.status is ExactStatus.UNSOLVABLE
-    assert result.outcome is SolveOutcome.UNSOLVABLE
+    assert result.outcome is Outcome.UNSOLVABLE
     assert result.solution is None
-    assert not result.used_backtrack_search
-    elimination = result.probing_rounds[-1].elimination
+    assert not result.run.used_backtrack_search
+    elimination = result.run.probing_rounds[-1].elimination
     assert elimination is not None
     assert elimination.status is LogicStatus.CONTRADICTION
 
@@ -182,16 +180,18 @@ def test_probe_score_ignores_units_already_satisfied_by_a_cat() -> None:
 def test_refuted_probe_restarts_with_fresh_candidate_scores() -> None:
     result = solve(PROBING_UNIQUE)
 
-    assert tuple(round_.probes[0].assumption for round_ in result.probing_rounds) == (
+    assert tuple(
+        round_.probes[0].assumption for round_ in result.run.probing_rounds
+    ) == (
         (0, 2),
         (1, 4),
         (0, 3),
         (3, 1),
     )
-    assert all(round_.elimination is not None for round_ in result.probing_rounds)
+    assert all(round_.elimination is not None for round_ in result.run.probing_rounds)
     for previous, current in zip(
-        result.probing_rounds[:-1],
-        result.probing_rounds[1:],
+        result.run.probing_rounds[:-1],
+        result.run.probing_rounds[1:],
         strict=True,
     ):
         assert current.before.is_excluded(previous.probes[0].assumption)
@@ -202,20 +202,20 @@ def test_probing_is_not_nested_and_a_contradiction_becomes_x() -> None:
 
     assert all(
         step.deduction.technique is not Technique.PROBE_ELIMINATION
-        for round_ in result.probing_rounds
+        for round_ in result.run.probing_rounds
         for probe in round_.probes
         for step in probe.logic_result.steps
     )
 
     eliminated_rounds = [
-        round_ for round_ in result.probing_rounds if round_.elimination is not None
+        round_ for round_ in result.run.probing_rounds if round_.elimination is not None
     ]
     assert eliminated_rounds
     for round_ in eliminated_rounds:
         contradiction = next(
             probe
             for probe in round_.probes
-            if probe.status is LogicStatus.CONTRADICTION
+            if probe.logic_result.status is LogicStatus.CONTRADICTION
         )
         elimination = round_.elimination
         assert elimination is not None

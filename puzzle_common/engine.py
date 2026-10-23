@@ -1,8 +1,14 @@
 """Shared deduction, one-ply refutation, and bounded search execution."""
 
 from dataclasses import dataclass, replace
-from enum import Enum, auto
+from enum import Enum, StrEnum, auto
 from typing import Protocol, Self
+
+
+class Outcome(StrEnum):
+    UNIQUE = "unique"
+    MULTIPLE = "multiple"
+    UNSOLVABLE = "unsolvable"
 
 
 class LogicStatus(Enum):
@@ -77,6 +83,34 @@ class SolveRun[Snapshot, Deduction, Decision, Witness]:
     probing_rounds: tuple[ProbeRound[Snapshot, Deduction, Decision, Witness], ...]
     solutions: tuple[Snapshot, ...]
     used_backtrack_search: bool
+
+
+@dataclass(frozen=True, slots=True)
+class SolveResult[Snapshot, Deduction, Decision, Witness]:
+    """Certified solution classification and the engine's unchanged native trace."""
+
+    outcome: Outcome
+    run: SolveRun[Snapshot, Deduction, Decision, Witness]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.outcome, Outcome):
+            raise TypeError("해 분류는 Outcome이어야 합니다.")
+        if not isinstance(self.run, SolveRun):
+            raise TypeError("풀이 기록은 SolveRun이어야 합니다.")
+        if (self.outcome is Outcome.UNSOLVABLE) == bool(self.run.solutions):
+            raise ValueError("해 분류와 풀이 기록의 해 존재 여부가 다릅니다.")
+
+    @property
+    def solution(self) -> Snapshot | None:
+        return self.run.solutions[0] if self.run.solutions else None
+
+    @property
+    def root_state(self) -> Snapshot:
+        """The permanent state, excluding an unsuccessful temporary assumption."""
+        if self.run.probing_rounds:
+            last = self.run.probing_rounds[-1]
+            return last.elimination.final_state if last.elimination else last.before
+        return self.run.initial_logic_result.final_state
 
 
 class Engine[State: EngineState, Snapshot, Deduction, Decision, Witness]:

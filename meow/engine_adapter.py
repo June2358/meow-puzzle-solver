@@ -1,16 +1,13 @@
-"""MEOW rules and native trace conversion for the shared solving engine."""
+"""MEOW rules and state deltas for the shared solving engine."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from puzzle_common.engine import LogicRun
-from puzzle_common.engine import LogicStatus as EngineLogicStatus
-
 from puzzle_common.coordinates import cell_name as _cell_name
 
 from .model import Cell
-from .solve_types import Deduction, LogicResult, LogicStatus, LogicStep, Technique
+from .solve_types import Deduction, Technique
 from .state import LogicSnapshot, LogicState
 from .techniques import find_next_deduction
 
@@ -144,32 +141,3 @@ class MeowDomain:
 
     def solution_key(self, snapshot: LogicSnapshot) -> tuple[Cell, ...]:
         return tuple(sorted(snapshot.cats))
-
-
-def logic_result_from(run: LogicRun) -> LogicResult:
-    """Restore MEOW statuses, messages, and one-based step numbering."""
-
-    if run.status is EngineLogicStatus.SOLVED:
-        status = LogicStatus.SOLVED_LOGICALLY
-        message = "결정적 추론만으로 해결했습니다."
-    elif run.status is EngineLogicStatus.STALLED:
-        status = LogicStatus.STALLED
-        message = "현재 구현된 논리 기법으로 더 진행할 수 없습니다."
-    else:
-        status = LogicStatus.CONTRADICTION
-        message = run.contradiction
-    return LogicResult(
-        status=status,
-        initial_state=run.initial_state,
-        final_state=run.final_state,
-        steps=tuple(
-            LogicStep(
-                number=number,
-                deduction=step.deduction,
-                before=step.before,
-                after=step.after,
-            )
-            for number, step in enumerate(run.steps, 1)
-        ),
-        message=message,
-    )

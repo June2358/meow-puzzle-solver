@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pygame
 
-from puzzle_common.coordinates import cell_name as _cell_name
+from puzzle_common.engine import SolveResult
 from puzzle_common.playback import PlaybackDetails, PlaybackScreen
-from puzzle_common.presentation import Outcome, PlaybackData
+from puzzle_common.presentation import PlaybackFrame
 from puzzle_common.ui_style import (
     ACCENT,
     GRAY,
@@ -18,9 +18,9 @@ from puzzle_common.ui_style import (
 )
 
 from .model import Cell, Puzzle, RegionGrid
-from .solve_types import SOLVER_ALGORITHM_LABELS, SolverAlgorithm
-from .state import CellState
-from .timeline import PlaybackFrame, TimelineKind
+from .presentation import describe_frame
+from .solve_types import Deduction
+from .state import CellState, LogicSnapshot
 from .ui_style import (
     draw_region_grid_lines,
     get_fonts,
@@ -138,33 +138,27 @@ def _draw_x(screen: pygame.Surface, rect: pygame.Rect, color: Color) -> None:
     )
 
 
-class MeowVisualizer(PlaybackScreen[RegionGrid, PlaybackFrame]):
+class MeowVisualizer(PlaybackScreen[RegionGrid, LogicSnapshot, Deduction, Cell, str]):
     """Interpret MEOW trace frames and render its colored queen board."""
 
-    def __init__(self, puzzle: Puzzle, data: PlaybackData[PlaybackFrame]) -> None:
+    def __init__(self, puzzle: Puzzle, result: SolveResult) -> None:
         if not isinstance(puzzle, Puzzle):
             raise TypeError("MeowVisualizer는 Puzzle을 받아야 합니다.")
-        if not isinstance(data, PlaybackData) or any(
-            not isinstance(frame, PlaybackFrame) for frame in data.frames
-        ):
-            raise TypeError(
-                "MeowVisualizer는 PlaybackData[PlaybackFrame]을 받아야 합니다."
-            )
-        if any(
-            frame.snapshot.puzzle.region_grid != puzzle.region_grid
-            for frame in data.frames
-        ):
-            raise ValueError("풀이 결과가 전달된 문제에서 생성되지 않았습니다.")
-
         self.puzzle = puzzle
         self.region_colors = region_palette(puzzle.region_labels)
         super().__init__(
-            data=data,
+            result=result,
             edit_draft=puzzle.region_grid,
             board_size=puzzle.size,
             caption="MEOW · Queens 퍼즐 풀이 과정",
             fonts=get_fonts(),
         )
+
+    def _validate_frames(self) -> None:
+        if any(not isinstance(frame.snapshot, LogicSnapshot) for frame in self.frames):
+            raise TypeError("MeowVisualizer는 MEOW 상태를 받아야 합니다.")
+        if any(frame.snapshot.puzzle != self.puzzle for frame in self.frames):
+            raise ValueError("풀이 결과가 전달된 문제에서 생성되지 않았습니다.")
 
     def _draw_board(self, frame: PlaybackFrame) -> None:
         self._draw_region_backgrounds()
@@ -180,24 +174,7 @@ class MeowVisualizer(PlaybackScreen[RegionGrid, PlaybackFrame]):
             self._outline_cell(frame.active_assumption, ORANGE, 3)
 
     def _presentation(self, frame: PlaybackFrame) -> PlaybackDetails:
-        probing = (
-            frame.kind is TimelineKind.LOGIC_STEP
-            and frame.active_assumption is not None
-        )
-        return PlaybackDetails(
-            title=frame.title,
-            reason=frame.message or frame.title,
-            effects=self._effect_groups(frame),
-            annotations=(
-                (SOLVER_ALGORITHM_LABELS[SolverAlgorithm.SINGLETON_PROBING], ORANGE),
-            )
-            if probing
-            else (),
-            assumption=f"{_cell_name(frame.active_assumption)} = 고양이"
-            if frame.active_assumption is not None
-            else "",
-            region_colors=self._region_chip_colors(frame),
-        )
+        return describe_frame(frame, self.result)
 
     def _draw_region_backgrounds(self) -> None:
         for cell in self.puzzle.cells:
@@ -211,9 +188,9 @@ class MeowVisualizer(PlaybackScreen[RegionGrid, PlaybackFrame]):
     def _draw_cell_states(self, frame: PlaybackFrame) -> None:
         new_cats: set[Cell] = set()
         new_exclusions: set[Cell] = set()
-        if frame.logic_step is not None:
-            new_cats.update(frame.logic_step.deduction.placements)
-            new_exclusions.update(frame.logic_step.deduction.exclusions)
+        if frame.deduction is not None:
+            new_cats.update(frame.deduction.placements)
+            new_exclusions.update(frame.deduction.exclusions)
 
         for cell in self.puzzle.cells:
             state = frame.snapshot.status_at(cell)
@@ -229,50 +206,3 @@ class MeowVisualizer(PlaybackScreen[RegionGrid, PlaybackFrame]):
                     else PRIMARY_DARK
                 )
                 _draw_cat(self.screen, rect, color)
-
-    def _region_chip_colors(self, frame: PlaybackFrame) -> tuple[Color, ...]:
-        return tuple(
-            self.region_colors[self.puzzle.region_labels[index]]
-            for index in frame.region_indices
-        )
-
-    def _effect_groups(
-        self, frame: PlaybackFrame
-    ) -> tuple[tuple[str, tuple[str, ...]], ...]:
-        if frame.logic_step is not None:
-            deduction = frame.logic_step.deduction
-            groups: list[tuple[str, tuple[str, ...]]] = []
-            for label, value, cells in (
-                ("고양이 확정", "고양이", deduction.placements),
-                ("X 기입", "X", deduction.exclusions),
-            ):
-                if cells:
-                    groups.append(
-                        (
-                            f"{label} · {len(cells)}",
-                            tuple(f"{_cell_name(cell)} = {value}" for cell in cells),
-                        )
-                    )
-            return tuple(groups)
-
-        if frame.kind is TimelineKind.RESTORE and frame.focus_cells:
-            return (
-                (
-                    "가정 제거 · 1",
-                    (f"{_cell_name(frame.focus_cells[0])} 원래 상태로 복원",),
-                ),
-            )
-        if frame.kind is TimelineKind.BACKTRACK_SEARCH:
-            search_label = SOLVER_ALGORITHM_LABELS[SolverAlgorithm.BACKTRACK_SEARCH]
-            return (("전환", (f"{search_label}으로 답 하나 찾기",)),)
-        if frame.kind is TimelineKind.FINAL:
-            if self.outcome is Outcome.UNSOLVABLE:
-                return (("최종 판정", ("가능한 고양이 배치 없음",)),)
-            qualifier = "대표 해" if self.outcome is Outcome.MULTIPLE else "유일해"
-            return (
-                (
-                    "최종 배치",
-                    (f"고양이 {len(frame.snapshot.cats)}마리 · {qualifier}",),
-                ),
-            )
-        return ()

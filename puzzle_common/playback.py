@@ -5,8 +5,9 @@ from dataclasses import dataclass
 
 import pygame
 
+from .engine import Outcome, SolveResult
 from .layout import get_board_layout
-from .presentation import Outcome, PlaybackData
+from .presentation import PlaybackFrame, build_frames
 from .runtime import next_frame
 from .ui_components import Button, draw_panel
 from .ui_style import (
@@ -66,19 +67,23 @@ def _pack_effect_items(
     return tuple(lines)
 
 
-class PlaybackScreen[Draft, Frame]:
+class PlaybackScreen[Draft, Snapshot, Deduction, Decision, Witness]:
     """Own presentation and playback controls without importing a puzzle type."""
 
     def __init__(
         self,
         *,
-        data: PlaybackData[Frame],
+        result: SolveResult[Snapshot, Deduction, Decision, Witness],
         edit_draft: Draft,
         board_size: int,
         caption: str,
         fonts: Fonts,
     ) -> None:
-        self.data = data
+        if not isinstance(result, SolveResult):
+            raise TypeError("풀이 결과는 SolveResult이어야 합니다.")
+        self.result = result
+        self._frames = build_frames(result)
+        self._validate_frames()
         self._edit_draft = edit_draft
         self._board_size = board_size
         self.layout = layout = get_board_layout(board_size)
@@ -122,25 +127,35 @@ class PlaybackScreen[Draft, Frame]:
         )
 
     @property
-    def frames(self) -> tuple[Frame, ...]:
-        return self.data.frames
+    def frames(
+        self,
+    ) -> tuple[PlaybackFrame[Snapshot, Deduction, Decision, Witness], ...]:
+        return self._frames
 
     @property
     def frame_count(self) -> int:
         return len(self.frames)
 
     @property
-    def current_frame(self) -> Frame:
+    def current_frame(self) -> PlaybackFrame[Snapshot, Deduction, Decision, Witness]:
         return self.frames[self.current_step_index]
 
     @property
     def outcome(self) -> Outcome:
-        return self.data.outcome
+        return self.result.outcome
 
-    def _draw_board(self, frame: Frame) -> None:
+    def _validate_frames(self) -> None:
+        """Reject foreign native payloads before constructing the display."""
         raise NotImplementedError
 
-    def _presentation(self, frame: Frame) -> PlaybackDetails:
+    def _draw_board(
+        self, frame: PlaybackFrame[Snapshot, Deduction, Decision, Witness]
+    ) -> None:
+        raise NotImplementedError
+
+    def _presentation(
+        self, frame: PlaybackFrame[Snapshot, Deduction, Decision, Witness]
+    ) -> PlaybackDetails:
         raise NotImplementedError
 
     def _status_badge(self) -> tuple[str, Color, Color]:
@@ -208,7 +223,9 @@ class PlaybackScreen[Draft, Frame]:
         self._draw_panel(frame)
         pygame.display.flip()
 
-    def _draw_panel(self, frame: Frame) -> None:
+    def _draw_panel(
+        self, frame: PlaybackFrame[Snapshot, Deduction, Decision, Witness]
+    ) -> None:
         draw_panel(self.screen, self.panel_rect)
         details = self._presentation(frame)
         x, y = self.panel_rect.left + 18, self.panel_rect.top + 18

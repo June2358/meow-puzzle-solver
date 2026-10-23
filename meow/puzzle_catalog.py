@@ -1,4 +1,4 @@
-"""Validated built-in MEOW Queens presets stored as package resources."""
+"""패키지 리소스로 저장한 검증된 내장 MEOW Queens 프리셋."""
 
 import json
 from collections.abc import Mapping
@@ -22,7 +22,7 @@ type _PuzzleCatalog = Mapping[str, RegionGrid]
 
 
 class PuzzleDataError(RuntimeError):
-    """Raised when the packaged preset catalog is missing or malformed."""
+    """패키지 프리셋 목록이 없거나 형식이 잘못되었을 때 발생한다."""
 
 
 def _validate_catalog(data: object) -> _PuzzleCatalog:
@@ -48,7 +48,7 @@ def _validate_catalog(data: object) -> _PuzzleCatalog:
 
 @cache
 def _load_puzzle_catalog() -> _PuzzleCatalog:
-    """Load and validate the six packaged presets once."""
+    """패키지의 여섯 프리셋을 한 번 읽고 검증한다."""
 
     try:
         text = (
@@ -70,7 +70,7 @@ def _load_puzzle_catalog() -> _PuzzleCatalog:
 
 
 def load_preset(name: str) -> Puzzle:
-    """Return one validated built-in puzzle by its canonical difficulty name."""
+    """표준 난이도 이름으로 검증된 내장 퍼즐 하나를 반환한다."""
 
     if not isinstance(name, str):
         raise TypeError("프리셋 이름은 문자열이어야 합니다.")

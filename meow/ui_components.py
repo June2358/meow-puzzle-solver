@@ -1,4 +1,4 @@
-"""Small pygame components shared by the input and playback screens."""
+"""입력 화면과 재생 화면이 공유하는 작은 pygame 컴포넌트."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ _BUTTON_BORDER_DARKEN = 22
 
 
 class Button:
-    """A rounded button with deterministic hover and hit-test behavior."""
+    """일정한 hover와 클릭 판정을 제공하는 둥근 버튼."""
 
     def __init__(
         self,

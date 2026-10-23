@@ -1,4 +1,4 @@
-# MEOW — Queens Puzzle Solver
+# MEOW — Queens 퍼즐 솔버
 
 MEOW는 1★ Star Battle 규칙을 고양이 테마로 표현한
 Queens 스타일 논리 퍼즐 솔버입니다. Queens의 왕관 대신 고양이를 배치하지만
@@ -36,7 +36,7 @@ MEOW는 결정적 추론의 각 단계와 중첩 없는 한 단계 가정을 화
 ### pygame
 
 - Windows 10/11
-- Python 3.12.2
+- Python 3.12.15
 - pygame-ce 2.5.8
 - [uv](https://docs.astral.sh/uv/)
 
@@ -49,21 +49,21 @@ Desktop과 Web 모두 같은 실제 weight 파일을 사용합니다.
 최초 환경 준비:
 
 ```powershell
-uv sync
+uv sync --locked
 ```
 
-실행:
+`run.cmd`를 더블클릭하거나 다음 명령으로 실행합니다:
 
 ```powershell
-uv run python -m meow
+uv run --locked --no-dev python -m meow
 ```
 
 전체 테스트와 정적 검사는 다음과 같이 실행합니다.
 
 ```powershell
-uv run ruff check .
-uv run ruff format --check .
-uv run python -m pytest -q -W error
+uv run --locked ruff check .
+uv run --locked ruff format --check .
+uv run --locked python -m pytest -q -W error
 ```
 
 ### 기본 프리셋
@@ -128,9 +128,9 @@ Exact 해 분류
 
 | 내부 명칭 | 사용자용 명칭 | 현재 포함 기법 |
 | --- | --- | --- |
-| `DIRECT_PROPAGATION` | Basic Deductions | 배치된 고양이의 충돌 제거, 행·열·색상 영역 Single |
-| `CONTAINER_MATCHING` | Container Locks | 색상 영역↔행·열 잠금, Hall 잠금 |
-| `UNIT_SUPPORT` | Crowding | 한 단위의 모든 후보와 충돌하는 칸 제외 |
+| `DIRECT_PROPAGATION` | 기본 추론 | 배치된 고양이의 충돌 제거, 행·열·색상 영역 Single |
+| `CONTAINER_MATCHING` | 영역·행·열 잠금 | 색상 영역↔행·열 잠금, Hall 잠금 |
+| `UNIT_SUPPORT` | 단위 막힘 | 한 단위의 모든 후보와 충돌하는 칸 제외 |
 
 아래 알고리즘 순서로 더 이상 변화가 없을 때까지 반복합니다. 한 deduction을
 적용하면 다시 기본 확정부터 검사합니다.
@@ -141,7 +141,7 @@ Exact 해 분류
 - Hall 잠금(최대 3개 단위)
 - 단위 막힘
 
-`Crowding`은 미완성 단위 후보들의 미리 계산된 충돌 집합을 교집합하여,
+단위 막힘(Crowding)은 미완성 단위 후보들의 미리 계산된 충돌 집합을 교집합하여,
 모든 후보와 공통으로 충돌하는 현재 후보를 한 번에 찾습니다.
 
 각 `LogicStep`은 사유와 적용 내역을 분리해 저장합니다. 화면에서 새로 확정된

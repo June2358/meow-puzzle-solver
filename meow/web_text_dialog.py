@@ -1,4 +1,4 @@
-"""One-shot browser text dialogs backed by real DOM textareas."""
+"""실제 DOM textarea를 사용하는 일회성 브라우저 텍스트 대화상자."""
 
 import sys
 from contextlib import suppress
@@ -11,19 +11,19 @@ _ERROR_ID = "meow-text-dialog-error"
 
 
 class WebTextDialogError(RuntimeError):
-    """Raised when the browser DOM bridge cannot operate the text dialog."""
+    """브라우저 DOM 연결이 텍스트 대화상자를 조작할 수 없을 때 발생한다."""
 
 
 @dataclass(frozen=True)
 class WebTextDialogResult:
-    """A single acknowledged browser action."""
+    """확인된 브라우저 동작 하나."""
 
     submitted: bool
     text: str = ""
 
 
 def is_web_runtime() -> bool:
-    """Return whether the application is running in Pygbag's browser runtime."""
+    """앱이 Pygbag 브라우저 런타임에서 실행 중인지 반환한다."""
 
     return sys.platform == "emscripten"
 
@@ -40,7 +40,7 @@ def _browser_document():  # noqa: ANN202
 
 
 def _ascii_html_text(text: str) -> str:
-    """Encode safe visible text as ASCII-only HTML for the Pygbag DOM bridge."""
+    """안전한 표시 텍스트를 Pygbag DOM 연결용 ASCII HTML로 인코딩한다."""
 
     escaped = escape(text, quote=False)
     return escaped.encode("ascii", "xmlcharrefreplace").decode("ascii")
@@ -51,7 +51,7 @@ def _set_dom_text(element, text: str) -> None:  # noqa: ANN001
 
 
 class WebTextDialog:
-    """Own a temporary DOM overlay and expose its action through polling."""
+    """임시 DOM 오버레이를 관리하고 폴링으로 동작을 제공한다."""
 
     def __init__(
         self,
@@ -194,7 +194,7 @@ class WebTextDialog:
         return button
 
     def poll(self) -> WebTextDialogResult | None:
-        """Return one submit/cancel action without closing a submitted dialog."""
+        """제출한 대화상자를 닫지 않고 제출/취소 동작 하나를 반환한다."""
 
         overlay = self._overlay
         textarea = self._textarea
@@ -219,7 +219,7 @@ class WebTextDialog:
         raise WebTextDialogError("브라우저 텍스트 입력 동작을 확인할 수 없습니다.")
 
     def show_error(self, message: str) -> None:
-        """Keep the original text visible and show a validation error in the modal."""
+        """원래 텍스트를 유지하면서 대화상자에 검증 오류를 표시한다."""
 
         if self._error is None or self._textarea is None:
             raise WebTextDialogError("브라우저 입력 오류를 표시할 수 없습니다.")
@@ -233,7 +233,7 @@ class WebTextDialog:
             ) from exc
 
     def close(self) -> None:
-        """Remove the overlay and return focus to the pygame canvas when possible."""
+        """오버레이를 제거하고 가능하면 pygame canvas에 초점을 돌린다."""
 
         overlay = self._overlay
         if overlay is None:
@@ -268,7 +268,7 @@ class WebTextDialog:
 
 
 def open_json_dialog() -> WebTextDialog:
-    """Open an editable textarea for user-driven JSON paste."""
+    """사용자가 JSON을 붙여넣을 편집 가능한 textarea를 연다."""
 
     return WebTextDialog(
         title="JSON 입력",
@@ -279,7 +279,7 @@ def open_json_dialog() -> WebTextDialog:
 
 
 def open_prompt_dialog(text: str) -> WebTextDialog:
-    """Show selectable read-only prompt text without Clipboard API access."""
+    """Clipboard API 없이 선택 가능한 읽기 전용 프롬프트를 표시한다."""
 
     return WebTextDialog(
         title="이미지 전사 프롬프트",

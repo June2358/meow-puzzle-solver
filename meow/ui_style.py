@@ -1,4 +1,4 @@
-"""Shared pygame colors, fonts, and region-board drawing helpers."""
+"""공유 pygame 색상·폰트와 영역 보드 그리기 도우미."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from .model import RegionGrid
 
 type Color = tuple[int, int, int]
 
-# Primary and accent colors are intentionally dark enough for compact Korean text.
+# 작은 한글도 읽기 쉽도록 기본색과 강조색을 충분히 어둡게 둔다.
 PRIMARY = (37, 99, 235)
 PRIMARY_DARK = (30, 64, 175)
 PRIMARY_LIGHT = (191, 219, 254)
@@ -46,7 +46,7 @@ _SEMIBOLD_FONT_PATH = _FONT_DIR / "Pretendard-SemiBold.otf"
 
 @dataclass(frozen=True, slots=True)
 class Fonts:
-    """Named font roles shared by the input and playback screens."""
+    """입력 화면과 재생 화면이 공유하는 이름별 폰트 역할."""
 
     number: pygame.font.Font
     body: pygame.font.Font
@@ -57,13 +57,13 @@ class Fonts:
 
 
 def _load_bundled_font(path: Path, size: int) -> pygame.font.Font:
-    """Load one exact bundled Pretendard weight."""
+    """번들된 Pretendard의 지정된 굵기를 읽는다."""
 
     return pygame.font.Font(str(path), size)
 
 
 def get_fonts() -> Fonts:
-    """Create deterministic font roles shared by Desktop and Web."""
+    """데스크톱과 웹이 공유하는 고정된 폰트 역할을 만든다."""
 
     if not pygame.font.get_init():
         pygame.font.init()
@@ -78,7 +78,7 @@ def get_fonts() -> Fonts:
 
 
 def configure_display(size: tuple[int, int], caption: str) -> pygame.Surface:
-    """Reuse the display surface and resize it only when the screen requires it."""
+    """화면 surface를 재사용하고 화면에 필요할 때만 크기를 바꾼다."""
 
     screen = pygame.display.get_surface()
     if screen is None or screen.get_size() != size:
@@ -88,7 +88,7 @@ def configure_display(size: tuple[int, int], caption: str) -> pygame.Surface:
 
 
 def wrap_text(text: str, font: pygame.font.Font, max_width: int) -> tuple[str, ...]:
-    """Wrap by rendered width, including Korean text without spaces."""
+    """공백 없는 한글도 렌더링 너비에 맞춰 줄바꿈한다."""
 
     if max_width <= 0:
         raise ValueError("텍스트 너비는 양수여야 합니다.")
@@ -109,7 +109,7 @@ def wrap_text(text: str, font: pygame.font.Font, max_width: int) -> tuple[str, .
 
 @cache
 def region_palette(labels: tuple[str, ...]) -> dict[str, Color]:
-    """Return stable, distinct pastel colors for an arbitrary region count."""
+    """주어진 영역 수에 맞는 고정된 서로 다른 파스텔 색상을 반환한다."""
 
     palette: dict[str, Color] = {}
     for index, label in enumerate(labels):
@@ -134,7 +134,7 @@ def draw_region_grid_lines(
     region_width: int = 3,
     cell_width: int = 1,
 ) -> None:
-    """Draw thin cell lines and thick boundaries between colored regions."""
+    """얇은 칸 선과 색상 영역 사이의 굵은 경계를 그린다."""
 
     if cell_size <= 0:
         raise ValueError("셀 크기는 양수여야 합니다.")

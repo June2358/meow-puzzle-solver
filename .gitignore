@@ -1,11 +1,11 @@
-# Python build and bytecode
+# Python 빌드 및 바이트코드
 __pycache__/
 *.py[cod]
 *.egg-info/
 build/
 dist/
 
-# Local environments and test caches
+# 로컬 환경과 검사 캐시
 .venv/
 venv/
 .pytest_cache/
@@ -13,7 +13,7 @@ venv/
 .coverage
 htmlcov/
 
-# Local editor and environment files
+# 로컬 편집기 설정과 환경 파일
 .vscode/
 .idea/
 .env
@@ -21,6 +21,3 @@ htmlcov/
 .DS_Store
 *.log
 *.tmp
-
-# Archived work outside the active product
-legacy/

@@ -1,4 +1,4 @@
-"""Immutable puzzle definition and precomputed Queens topology."""
+"""불변 퍼즐 정의와 미리 계산된 Queens 칸 관계."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ MAX_PUZZLE_SIZE = 26
 
 
 class InvalidRegionMapError(ValueError):
-    """Raised when a value is not a valid square Queens region map."""
+    """값이 유효한 정사각형 Queens 영역 맵이 아닐 때 발생한다."""
 
 
 def _normalize_region_label(label: object, row: int, column: int) -> str:
@@ -65,17 +65,16 @@ def _normalize_region_grid(value: object) -> RegionGrid:
 
 
 def _ordered_labels(grid: RegionGrid) -> tuple[str, ...]:
-    # dict insertion order gives a stable row-major region order.
+    # dict 삽입 순서로 행 우선의 고정된 영역 순서를 얻는다.
     return tuple(dict.fromkeys(label for row in grid for label in row))
 
 
 @dataclass(frozen=True, slots=True, eq=False)
 class Puzzle:
-    """An immutable N×N Queens puzzle with all topology precomputed.
+    """모든 칸 관계를 미리 계산한 불변 N×N Queens 퍼즐.
 
-    Coordinates are zero-based ``(row, column)`` tuples. Region indices use
-    the stable row-major order in which their labels first appear.
-    """
+    좌표는 0부터 시작하는 ``(row, column)`` 튜플이다. 영역 인덱스는
+    라벨이 처음 나타나는 행 우선 순서로 고정한다."""
 
     region_grid: RegionGrid
     size: int = field(init=False)
@@ -142,12 +141,12 @@ class Puzzle:
 
     @classmethod
     def from_region_grid(cls, region_grid: object) -> Puzzle:
-        """Validate a region grid and construct its immutable puzzle."""
+        """영역 격자를 검증하고 불변 퍼즐을 만든다."""
 
         return cls(region_grid)
 
     def validate_cell(self, cell: object) -> Cell:
-        """Return a normalized cell or raise for an invalid coordinate."""
+        """정규화된 칸을 반환하고 잘못된 좌표에는 예외를 발생시킨다."""
 
         if (
             isinstance(cell, (str, bytes))
@@ -163,18 +162,18 @@ class Puzzle:
         return row, col
 
     def region_of(self, cell: Cell) -> int:
-        """Return the zero-based stable region index containing ``cell``."""
+        """``cell``이 속한 영역의 0부터 시작하는 고정 인덱스를 반환한다."""
 
         return self._region_index_by_cell[self.validate_cell(cell)]
 
     def region_label(self, cell: Cell) -> str:
-        """Return the original region label at ``cell``."""
+        """``cell``의 원래 영역 라벨을 반환한다."""
 
         normalized = self.validate_cell(cell)
         return self.region_grid[normalized[0]][normalized[1]]
 
     def conflict(self, first: Cell, second: Cell) -> bool:
-        """Whether two distinct cells cannot both contain cats."""
+        """서로 다른 두 칸에 고양이를 동시에 놓을 수 없는지 검사한다."""
 
         normalized_first = self.validate_cell(first)
         normalized_second = self.validate_cell(second)

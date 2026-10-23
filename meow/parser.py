@@ -1,4 +1,4 @@
-"""Parser for the canonical JSON Queens puzzle format."""
+"""표준 JSON Queens 퍼즐 형식 파서."""
 
 from __future__ import annotations
 
@@ -8,15 +8,14 @@ from .model import InvalidRegionMapError, Puzzle
 
 
 class PuzzleParseError(InvalidRegionMapError):
-    """Raised when input cannot be interpreted as a puzzle document."""
+    """입력을 퍼즐 문서로 해석할 수 없을 때 발생한다."""
 
 
 def parse_puzzle_json(text: str) -> Puzzle:
-    """Parse the canonical JSON puzzle object.
+    """표준 JSON 퍼즐 객체를 파싱한다.
 
-    The object has exactly one ``regions`` field containing a two-dimensional
-    array of region-label strings. No metadata or solution fields are accepted.
-    """
+    객체에는 영역 라벨 문자열의 2차원 배열인 ``regions`` 필드만 허용한다.
+    메타데이터나 해 필드는 받지 않는다."""
 
     if not isinstance(text, str):
         raise TypeError("JSON 퍼즐 입력은 문자열이어야 합니다.")
@@ -51,6 +50,5 @@ def parse_puzzle_json(text: str) -> Puzzle:
     try:
         return Puzzle.from_region_grid(regions)
     except InvalidRegionMapError as error:
-        # JSON syntax/schema/model failures share one public parse-error type,
-        # while preserving the precise validation message (including RnCn).
+        # JSON 문법·스키마·모델 오류는 공개 파싱 예외를 공유하며 RnCn 등 상세 메시지를 보존한다.
         raise PuzzleParseError(str(error)) from error

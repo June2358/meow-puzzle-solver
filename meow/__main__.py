@@ -1,4 +1,4 @@
-"""``python -m meow`` launches the pygame application."""
+"""``python -m meow``로 pygame 앱을 실행한다."""
 
 import asyncio
 

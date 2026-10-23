@@ -1,4 +1,4 @@
-"""Event-driven pygame playback for a precomputed MEOW Queens solve trace."""
+"""미리 계산한 MEOW Queens 풀이 기록의 이벤트 기반 pygame 재생."""
 
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ def _pack_effect_items(
     font: pygame.font.Font,
     max_width: int,
 ) -> tuple[str, ...]:
-    """Pack complete cell effects onto lines without splitting coordinates."""
+    """좌표를 나누지 않고 칸 효과 전체를 줄에 배치한다."""
 
     if not items:
         return ()
@@ -84,7 +84,7 @@ def _draw_cat(
     rect: pygame.Rect,
     color: Color,
 ) -> None:
-    """Draw a scalable cat face without depending on an external image asset."""
+    """외부 이미지 없이 크기 조절 가능한 고양이 얼굴을 그린다."""
 
     size = min(rect.width, rect.height)
     center_x, center_y = rect.center
@@ -190,7 +190,7 @@ def _draw_x(screen: pygame.Surface, rect: pygame.Rect, color: Color) -> None:
 
 
 class MeowVisualizer:
-    """Navigate immutable playback frames without rerunning the solver."""
+    """솔버를 다시 실행하지 않고 불변 재생 프레임을 이동한다."""
 
     def __init__(self, puzzle: Puzzle, result: SolveResult) -> None:
         if not isinstance(puzzle, Puzzle):
@@ -792,7 +792,7 @@ class MeowVisualizer:
         return None
 
     async def run(self) -> RegionGrid | None:
-        """Run until the user requests editing or closes the application."""
+        """사용자가 편집을 요청하거나 앱을 닫을 때까지 실행한다."""
 
         clock = pygame.time.Clock()
         self.draw()

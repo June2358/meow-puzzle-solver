@@ -1,10 +1,10 @@
 [project]
 name = "meow-solver"
 version = "0.1.0"
-description = "Cat-themed 1-star Star Battle (Queens-style) solver and visualizer"
+description = "고양이 테마 1-star Star Battle (Queens) 솔버와 시각화 앱"
 authors = [{ name = "Lim Junmin", email = "dsgoat99@naver.com" }]
 readme = "README.md"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.12.15,<3.13"
 dependencies = [
     "pygame-ce==2.5.8",
 ]
@@ -12,10 +12,10 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest==9.1.1",
-    "ruff==0.16.4",
+    "ruff==0.17.2",
 ]
 web = [
-    "pygbag==0.9.2",
+    "pygbag==0.9.3",
 ]
 
 [tool.uv]
@@ -26,6 +26,7 @@ testpaths = ["tests"]
 addopts = "-W error"
 
 [tool.ruff]
+# 데스크톱과 Pygbag 브라우저의 Python 3.12 문법 호환성을 유지합니다.
 target-version = "py312"
 
 [tool.ruff.lint]

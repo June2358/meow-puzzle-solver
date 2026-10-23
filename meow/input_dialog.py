@@ -1,4 +1,4 @@
-"""Editable MEOW Queens region input with strict external-vision JSON paste."""
+"""외부 비전 JSON을 엄격히 검증하는 MEOW Queens 영역 입력 화면."""
 
 from collections.abc import Callable, Iterable
 from typing import Final
@@ -64,7 +64,7 @@ _MESSAGE_SPACING = 20
 
 
 class MeowInputDialog:
-    """Collect one valid variable-size Queens region puzzle."""
+    """유효한 가변 크기 Queens 영역 퍼즐 하나를 입력받는다."""
 
     def __init__(
         self,
@@ -197,7 +197,7 @@ class MeowInputDialog:
         self.notice_message = None
 
     def _replace_draft(self, draft: RegionDraft, notice: str) -> None:
-        """Atomically replace the visible draft with an already-valid value."""
+        """화면의 초안을 이미 검증된 값으로 한 번에 교체한다."""
 
         self.draft = draft
         self.selected_cell = None
@@ -314,7 +314,7 @@ class MeowInputDialog:
         if font.size(label)[0] <= width:
             return label
         if not label.isascii():
-            # shortcut: Unicode widths can shrink; use shaping-aware metrics if fitting is slow.
+            # shortcut: Unicode 너비는 줄어들 수 있으므로 맞춤이 느려지면 shaping 기반 측정으로 바꾼다.
             content = label
             while content and font.size(content + "…")[0] > width:
                 content = content[:-1]
@@ -621,7 +621,7 @@ class MeowInputDialog:
         self._paste_puzzle()
 
     def _paste_puzzle(self) -> None:
-        """Parse completely before replacing any visible draft state."""
+        """화면의 초안 상태를 바꾸기 전에 입력 전체를 파싱한다."""
 
         try:
             text = paste_text()
@@ -630,7 +630,7 @@ class MeowInputDialog:
             self._show_error(str(error))
 
     def _load_puzzle_text(self, text: str) -> None:
-        """Parse first, then atomically replace the draft with validated JSON."""
+        """JSON을 먼저 검증한 뒤 초안을 한 번에 교체한다."""
 
         puzzle = parse_puzzle_json(text)
         self._replace_draft(
@@ -718,7 +718,7 @@ class MeowInputDialog:
         )
 
     async def run(self) -> Puzzle | None:
-        """Wait for input until a valid Puzzle is confirmed or the app closes."""
+        """유효한 Puzzle이 확정되거나 앱이 닫힐 때까지 입력을 기다린다."""
 
         clock = pygame.time.Clock()
         self.draw()

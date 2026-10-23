@@ -1,4 +1,4 @@
-"""Top-level pygame flow for editing and solving MEOW Queens puzzles."""
+"""MEOW Queens 퍼즐의 입력과 풀이를 연결하는 pygame 앱 흐름."""
 
 import pygame
 
@@ -9,7 +9,7 @@ from .visualizer import MeowVisualizer
 
 
 async def main() -> None:
-    """Run one input/solve/visualize loop until either screen closes."""
+    """화면을 닫을 때까지 입력·풀이·시각화 흐름을 반복한다."""
 
     pygame.init()
     pygame.key.stop_text_input()

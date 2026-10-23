@@ -1,4 +1,4 @@
-"""Mutable logical board state and immutable finder snapshots."""
+"""가변 논리 보드 상태와 불변 finder 스냅샷."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from .model import Cell, Puzzle
 
 
 class CellState(StrEnum):
-    """The three states used by the logic engine."""
+    """논리 엔진에서 사용하는 세 가지 상태."""
 
     POSSIBLE = "possible"
     EXCLUDED = "excluded"
@@ -21,7 +21,7 @@ type StatusGrid = tuple[tuple[CellState, ...], ...]
 
 
 class InvalidStateTransitionError(ValueError):
-    """Raised when a requested state change contradicts current knowledge."""
+    """요청한 상태 변경이 현재 정보와 모순일 때 발생한다."""
 
 
 def _normalize_status_grid(puzzle: Puzzle, value: object) -> StatusGrid:
@@ -67,7 +67,7 @@ def _filter_unit(
 
 @dataclass(frozen=True, slots=True)
 class LogicSnapshot:
-    """An immutable board image safe to hand to deduction finders."""
+    """추론 finder에 안전하게 전달할 수 있는 불변 보드 상태."""
 
     puzzle: Puzzle
     status_grid: StatusGrid
@@ -117,14 +117,14 @@ class LogicSnapshot:
 
     def is_solved(self) -> bool:
         cats = self.cats
-        # N nonconflicting cats fill all N rows, columns, and regions.
+        # 충돌하지 않는 고양이 N마리는 N개 행·열·영역을 모두 채운다.
         return len(cats) == self.puzzle.size and not any(
             self.puzzle.conflicts[cell] & cats for cell in cats
         )
 
 
 class LogicState:
-    """Mutable cell states changed only through explicit primitive operations."""
+    """명시적인 기본 연산으로만 변경하는 가변 칸 상태."""
 
     __slots__ = ("puzzle", "_statuses")
 
@@ -149,7 +149,7 @@ class LogicState:
         return tuple(tuple(row) for row in self._statuses)
 
     def exclude(self, cell: Cell) -> bool:
-        """Mark a possible cell excluded; return whether state changed."""
+        """가능한 칸을 제외하고 상태 변경 여부를 반환한다."""
 
         row, col = self.puzzle.validate_cell(cell)
         current = self._statuses[row][col]
@@ -163,7 +163,7 @@ class LogicState:
         return True
 
     def place_cat(self, cell: Cell) -> bool:
-        """Place a cat without implicit propagation; return whether changed."""
+        """암묵적인 전파 없이 고양이를 놓고 변경 여부를 반환한다."""
 
         row, col = normalized = self.puzzle.validate_cell(cell)
         current = self._statuses[row][col]

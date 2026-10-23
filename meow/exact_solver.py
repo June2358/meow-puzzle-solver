@@ -53,7 +53,7 @@ class ExactVerifier:
             | (1 << (2 * puzzle.size + puzzle.region_of((row, column))))
             for row, column in puzzle.cells
         )
-        # Build attacks from the rules independently of the logic engine's conflicts.
+        # 논리 엔진의 충돌 정보와 독립적으로 규칙에서 공격 관계를 만든다.
         self._conflict_masks = tuple(
             self._unit_masks[row]
             | self._unit_masks[puzzle.size + column]

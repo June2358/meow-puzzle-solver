@@ -1,4 +1,4 @@
-"""Incomplete, immutable region-grid drafts for the pygame input screen."""
+"""pygame 입력 화면용 미완성 불변 영역 격자 초안."""
 
 from __future__ import annotations
 
@@ -18,11 +18,11 @@ type DraftGrid = tuple[tuple[DraftLabel, ...], ...]
 
 
 class InvalidDraftError(ValueError):
-    """Raised when a draft is not a non-empty square label grid."""
+    """초안이 비어 있지 않은 정사각형 라벨 격자가 아닐 때 발생한다."""
 
 
 class IncompleteDraftError(InvalidDraftError):
-    """Raised when a draft cannot become a Puzzle because a cell is empty."""
+    """빈칸 때문에 초안을 Puzzle로 만들 수 없을 때 발생한다."""
 
 
 def _normalize_label(label: object, row: int, column: int) -> DraftLabel:
@@ -67,7 +67,7 @@ def _normalize_grid(value: object) -> DraftGrid:
 
 @dataclass(frozen=True, slots=True)
 class RegionDraft:
-    """A square draft that permits empty cells but no malformed labels."""
+    """빈칸을 허용하지만 잘못된 라벨은 허용하지 않는 정사각형 초안."""
 
     grid: DraftGrid
     size: int = field(init=False)
@@ -79,7 +79,7 @@ class RegionDraft:
 
     @classmethod
     def empty(cls, size: int) -> RegionDraft:
-        """Create an empty ``size`` by ``size`` draft."""
+        """빈 ``size`` × ``size`` 초안을 만든다."""
 
         if type(size) is not int or not 1 <= size <= MAX_PUZZLE_SIZE:
             raise InvalidDraftError(f"draft 크기는 1~{MAX_PUZZLE_SIZE}여야 합니다.")
@@ -91,7 +91,7 @@ class RegionDraft:
 
     @property
     def labels(self) -> tuple[str, ...]:
-        """Return filled labels in stable row-major first-seen order."""
+        """채워진 라벨을 행 우선의 첫 등장 순서로 반환한다."""
 
         return tuple(
             dict.fromkeys(
@@ -118,7 +118,7 @@ class RegionDraft:
         return self.grid[row][column]
 
     def with_cell(self, cell: Cell, label: DraftLabel) -> RegionDraft:
-        """Return a new draft with one cell changed."""
+        """칸 하나를 변경한 새 초안을 반환한다."""
 
         row, column = self.validate_cell(cell)
         normalized = _normalize_label(label, row, column)
@@ -136,7 +136,7 @@ class RegionDraft:
         return None
 
     def to_puzzle(self) -> Puzzle:
-        """Build a Puzzle, reporting the first empty coordinate beforehand."""
+        """첫 빈칸 좌표를 먼저 검사한 뒤 Puzzle을 만든다."""
 
         empty = self.first_empty()
         if empty is not None:

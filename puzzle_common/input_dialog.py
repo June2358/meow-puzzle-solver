@@ -179,7 +179,6 @@ class InputDialog[PuzzleT]:
                     )
                 ),
             )
-        mouse = pygame.mouse.get_pos()
         for button in (
             *self.preset_buttons,
             *self.editor_buttons,
@@ -187,7 +186,6 @@ class InputDialog[PuzzleT]:
             self.paste_button,
             self.start_button,
         ):
-            button.update_hover(mouse)
             button.draw(self.screen)
         self._draw_editor_controls()
         self._draw_instructions()
@@ -279,7 +277,7 @@ class InputDialog[PuzzleT]:
         return None
 
     def _handle_editor_click(self, position: tuple[int, int]) -> bool:
-        cell = self._cell_at(position)
+        cell = self.layout.cell_at(position)
         if cell is not None:
             self.selected_cell = cell
         return False
@@ -422,18 +420,6 @@ class InputDialog[PuzzleT]:
             self._clear_message()
             self.running = False
         return puzzle
-
-    def _cell_at(self, position: tuple[int, int]) -> tuple[int, int] | None:
-        x, y = position
-        if not (
-            self.grid_start_x <= x < self.grid_start_x + self.grid_width
-            and self.grid_start_y <= y < self.grid_start_y + self.grid_width
-        ):
-            return None
-        return (
-            (y - self.grid_start_y) // self.cell_size,
-            (x - self.grid_start_x) // self.cell_size,
-        )
 
     async def run(self) -> PuzzleT | None:
         clock = pygame.time.Clock()

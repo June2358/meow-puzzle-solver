@@ -4,6 +4,7 @@ from collections.abc import Collection
 
 import pygame
 
+from puzzle_common.layout import BoardLayout
 from puzzle_common.ui_style import GRID_BOX_LINE, GRID_LINE, RED, Fonts, draw_grid_lines
 from puzzle_common.ui_style import get_fonts as load_fonts
 
@@ -38,8 +39,7 @@ def draw_sudoku_grid_lines(
 def draw_conflict_cells(
     screen: pygame.Surface,
     conflicts: Collection[Cell],
-    origin: tuple[int, int],
-    cell_size: int,
+    layout: BoardLayout,
     *,
     alpha: int = 128,
 ) -> None:
@@ -48,12 +48,9 @@ def draw_conflict_cells(
     if not conflicts:
         return
 
-    start_x, start_y = origin
-    cell_surface = pygame.Surface((cell_size - 2, cell_size - 2))
+    cell_surface = pygame.Surface((layout.cell_size - 2, layout.cell_size - 2))
     cell_surface.set_alpha(alpha)
     cell_surface.fill(RED)
 
-    for row, col in conflicts:
-        x = start_x + col * cell_size
-        y = start_y + row * cell_size
-        screen.blit(cell_surface, (x + 1, y + 1))
+    for cell in conflicts:
+        screen.blit(cell_surface, layout.cell_rect(cell).inflate(-2, -2).topleft)

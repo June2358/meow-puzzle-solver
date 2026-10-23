@@ -20,3 +20,34 @@ def test_shared_cell_labels_use_one_based_coordinates(cell, expected):
     from puzzle_common.coordinates import cell_name
 
     assert cell_name(cell) == expected
+
+
+@pytest.mark.parametrize(
+    "hover_color, expected",
+    ((None, (62, 72, 82)), ((99, 80, 70), (99, 80, 70))),
+)
+def test_button_draw_uses_the_current_pointer_without_a_separate_hover_update(
+    monkeypatch, hover_color, expected
+):
+    from puzzle_common.ui_components import Button
+
+    pygame.font.init()
+    screen = pygame.Surface((100, 80))
+    button = Button(
+        pygame.Rect(10, 10, 60, 40),
+        "",
+        (50, 60, 70),
+        pygame.font.Font(None, 20),
+        hover_color=hover_color,
+        border_color=(1, 2, 3),
+    )
+    for pointer, color in (
+        ((0, 0), (50, 60, 70)),
+        ((20, 20), expected),
+        ((0, 0), (50, 60, 70)),
+    ):
+        monkeypatch.setattr(pygame.mouse, "get_pos", lambda pointer=pointer: pointer)
+        button.draw(screen)
+
+        assert screen.get_at((30, 20))[:3] == color
+        assert screen.get_at((10, 25))[:3] == (1, 2, 3)

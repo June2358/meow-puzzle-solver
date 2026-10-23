@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import StrEnum
+from itertools import combinations
 
 from .model import Cell, Puzzle
 
@@ -109,11 +110,30 @@ class LogicSnapshot:
         return _filter_unit(self.puzzle, self.status_grid, unit, CellState.CAT)
 
     def has_contradiction(self) -> bool:
-        cats = self.cats
-        return any(self.puzzle.conflicts[cell] & cats for cell in cats) or any(
-            not self.cats_in(unit) and not self.candidates_for(unit)
-            for unit in self.puzzle.units
+        return self.contradiction_message() is not None
+
+    def contradiction_message(self) -> str | None:
+        """Report the first cat conflict or empty exact-one unit."""
+
+        for first, second in combinations(sorted(self.cats), 2):
+            if second in self.puzzle.conflicts[first]:
+                return (
+                    f"R{first[0] + 1}C{first[1] + 1}과 "
+                    f"R{second[0] + 1}C{second[1] + 1}의 고양이가 충돌합니다."
+                )
+
+        named_groups = (
+            ("행", self.puzzle.rows),
+            ("열", self.puzzle.cols),
+            ("색상 영역", self.puzzle.regions),
         )
+        for name, units in named_groups:
+            for index, unit in enumerate(units):
+                if not self.cats_in(unit) and not self.candidates_for(unit):
+                    if name == "색상 영역":
+                        return "표시된 색상 영역에 고양이를 놓을 칸이 없습니다."
+                    return f"{name} {index + 1}에 가능한 칸이 없습니다."
+        return None
 
     def is_solved(self) -> bool:
         cats = self.cats

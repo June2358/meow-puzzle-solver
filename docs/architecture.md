@@ -7,7 +7,8 @@
 | --- | --- | --- |
 | `puzzle_common.app.run_app` | pygame 수명주기, 편집 → 풀이 → 재생 → 편집 반복, 해 없음의 편집 복귀, 종료 정리 | 편집기/재생기 생성, 정규화된 solve, 초안 추출 |
 | `puzzle_common.presentation.PlaybackData` | 공통 해 분류와 비어 있지 않은 불변 단계 목록 | `meow.presentation.to_playback`, `sudoku.presentation.to_playback`이 기존 결과를 변환 |
-| `puzzle_common.layout` | 입력/재생 창·보드·패널의 같은 배치 정책 | 실제 격자 크기 |
+| `puzzle_common.layout` | 입력/재생 창·보드·패널의 배치, `cell_rect`/`cell_at` 셀 좌표와 히트 검사 | 실제 격자 크기 |
+| `puzzle_common.constraints.locked_candidate_targets` | 후보가 한 단위에 모였을 때 원본 단위 밖에서 제거할 칸 선택 | 단위/후보/가능 칸 판정, 기법 순서, 최소 근거 수와 설명 |
 | `puzzle_common.input_dialog.InputDialog` | 레이아웃, 버튼, 프리셋 조작, 메시지/사용법, JSON/프롬프트/클립보드, 모달 정리, 이벤트 루프 | 제목/설명/프롬프트, 보드 상태와 편집 규칙, 파서/검증, 보드 그리기 |
 | `puzzle_common.playback.PlaybackScreen` | 현재 단계와 인덱스, 공통 결과 배지·셀 위치·좌표·패널·버튼, 이동/누르기 반복/자동 재생/포커스 해제, 이벤트 루프 | 전달받은 같은 단계의 보드 그리기와 `PlaybackDetails` 변환 |
 | `puzzle_common.catalog.read_catalog` | 패키지 JSON 파일 읽기와 파일/JSON 오류 처리 | 프리셋 스키마 검증과 캐시 |
@@ -56,6 +57,11 @@ Visualizers는 원본 SolveResult 대신 각 퍼즐의 typed frame을 담은 Pla
 작은 안내 글꼴은 공통 `Fonts.info`15이며 실제 숫자/후보 크기는 각 퍼즐에 맞게 유지한다.
 
 ## 변경 기준
+
+Sudoku의 pointing/claiming과 MEOW의 영역↔행/열 잠금은 같은 후보 고정 연산을 사용한다.
+실제 배치/제외 적용과 풀이 기록은 각 솔버에 남긴다. MEOW의 모순 판정과 메시지는
+`LogicSnapshot.contradiction_message()`가 담당한다. 버튼은 그릴 때 호버를 계산하며
+입력/재생 화면이 별도의 호버 상태를 갱신하지 않는다.
 
 버튼·패널·조작·메시지·입력창·앱 전환을 바꿀 때에는 공통 모듈을 수정한다.
 퍼즐 규칙·풀이 순서·JSON 형식·숫자 또는 영역의 의미를 바꿀 때에는 해당

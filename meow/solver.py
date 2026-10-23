@@ -303,15 +303,18 @@ class Solver:
             candidates = tuple(score.cell for score in _rank_probe_candidates(current))
             probes: list[ProbeResult] = []
             elimination = None
+            decisive = None
 
             for candidate in candidates:
                 result = self._probe_candidate(current, candidate)
                 probes.append(result)
 
-                if result.status is LogicStatus.CONTRADICTION:
-                    elimination = self._apply_refuted_probe(current, result)
-                    break
-                if result.status is LogicStatus.SOLVED_LOGICALLY:
+                if result.status is not LogicStatus.STALLED:
+                    decisive = result.logic_result
+                    if result.status is LogicStatus.CONTRADICTION:
+                        elimination = decisive = self._apply_refuted_probe(
+                            current, result
+                        )
                     break
 
             rounds.append(
@@ -322,20 +325,13 @@ class Solver:
                     elimination=elimination,
                 )
             )
-            if elimination is not None:
-                if elimination.status is LogicStatus.SOLVED_LOGICALLY:
-                    return tuple(rounds), _solution_from(elimination.final_state), False
-                if elimination.status is LogicStatus.CONTRADICTION:
-                    return tuple(rounds), None, False
-                current = elimination.final_state
-            elif probes and probes[-1].status is LogicStatus.SOLVED_LOGICALLY:
-                return (
-                    tuple(rounds),
-                    _solution_from(probes[-1].logic_result.final_state),
-                    False,
-                )
-            else:
+            if decisive is None:
                 return tuple(rounds), self._backtrack_search(current), True
+            if decisive.status is LogicStatus.SOLVED_LOGICALLY:
+                return tuple(rounds), _solution_from(decisive.final_state), False
+            if decisive.status is LogicStatus.CONTRADICTION:
+                return tuple(rounds), None, False
+            current = decisive.final_state
 
     def _backtrack_search(self, snapshot: LogicSnapshot) -> Solution | None:
         """추가 재생 기록을 만들지 않고 분기하여 첫 해 하나만 찾는다."""

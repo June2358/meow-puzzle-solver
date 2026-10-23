@@ -4,7 +4,6 @@ from pathlib import Path
 import pygame
 import pytest
 
-from meow import ui_style
 from puzzle_common import ui_style as shared_style
 
 
@@ -16,18 +15,18 @@ def _glyph_signature(
 
 
 def _source_characters() -> tuple[str, ...]:
-    package = Path(ui_style.__file__).parent
+    root = Path(__file__).resolve().parents[2]
     texts: list[str] = []
-    for path in (
-        *package.rglob("*.py"),
-        *Path(shared_style.__file__).parent.rglob("*.py"),
-    ):
-        tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
-        texts.extend(
-            node.value
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Constant) and isinstance(node.value, str)
-        )
+    for path in (root / name for name in ("meow", "sudoku", "puzzle_common")):
+        for source_file in path.rglob("*.py"):
+            tree = ast.parse(
+                source_file.read_text(encoding="utf-8-sig"), filename=str(source_file)
+            )
+            texts.extend(
+                node.value
+                for node in ast.walk(tree)
+                if isinstance(node, ast.Constant) and isinstance(node.value, str)
+            )
     return tuple(
         sorted(
             {

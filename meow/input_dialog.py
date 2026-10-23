@@ -311,7 +311,10 @@ class MeowInputDialog:
 
     @staticmethod
     def _fit_label(label: str, font: pygame.font.Font, width: int) -> str:
-        if font.size(label)[0] <= width:
+        label_width = font.size(label)[0]
+        if not label_width:
+            return ""
+        if label_width <= width:
             return label
         if not label.isascii():
             # shortcut: Unicode 너비는 줄어들 수 있으므로 맞춤이 느려지면 shaping 기반 측정으로 바꾼다.
@@ -473,6 +476,8 @@ class MeowInputDialog:
             if event.type == pygame.QUIT:
                 self.running = False
                 return None
+            if self._web_text_dialog is not None:
+                continue
             if event.type == pygame.WINDOWFOCUSLOST:
                 self._dragging = False
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -725,14 +730,11 @@ class MeowInputDialog:
         try:
             while self.running:
                 await next_frame(clock)
-                modal_was_open = self._web_text_dialog is not None
-                dialog_changed = self._poll_web_text_dialog()
                 events = pygame.event.get()
-                if modal_was_open:
-                    events = [event for event in events if event.type == pygame.QUIT]
                 result = self._handle_events(events)
                 if result is not None:
                     return result
+                dialog_changed = self._poll_web_text_dialog()
                 if self.running and (events or dialog_changed):
                     self.draw()
             return None

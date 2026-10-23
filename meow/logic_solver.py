@@ -55,11 +55,10 @@ class LogicSolver:
                 raise ValueError("initial_state는 같은 퍼즐에 속해야 합니다.")
             state = initial_state.clone()
 
-        initial_snapshot = state.snapshot()
+        initial_snapshot = before = state.snapshot()
         steps: list[LogicStep] = []
 
         while True:
-            before = state.snapshot()
             contradiction = _contradiction_message(before)
             if contradiction is not None:
                 status = LogicStatus.CONTRADICTION
@@ -91,6 +90,7 @@ class LogicSolver:
                 after=state.snapshot(),
             )
             steps.append(step)
+            before = step.after
 
         return LogicResult(
             status=status,

@@ -56,24 +56,18 @@ class Fonts:
     title: pygame.font.Font
 
 
-def _load_bundled_font(path: Path, size: int) -> pygame.font.Font:
-    """번들된 Pretendard의 지정된 굵기를 읽는다."""
-
-    return pygame.font.Font(str(path), size)
-
-
 def get_fonts() -> Fonts:
     """데스크톱과 웹이 공유하는 고정된 폰트 역할을 만든다."""
 
     if not pygame.font.get_init():
         pygame.font.init()
     return Fonts(
-        number=_load_bundled_font(_SEMIBOLD_FONT_PATH, 34),
-        body=_load_bundled_font(_REGULAR_FONT_PATH, 17),
-        candidate=_load_bundled_font(_REGULAR_FONT_PATH, 13),
-        button=_load_bundled_font(_SEMIBOLD_FONT_PATH, 17),
-        heading=_load_bundled_font(_SEMIBOLD_FONT_PATH, 19),
-        title=_load_bundled_font(_SEMIBOLD_FONT_PATH, 25),
+        number=pygame.font.Font(_SEMIBOLD_FONT_PATH, 34),
+        body=pygame.font.Font(_REGULAR_FONT_PATH, 17),
+        candidate=pygame.font.Font(_REGULAR_FONT_PATH, 13),
+        button=pygame.font.Font(_SEMIBOLD_FONT_PATH, 17),
+        heading=pygame.font.Font(_SEMIBOLD_FONT_PATH, 19),
+        title=pygame.font.Font(_SEMIBOLD_FONT_PATH, 25),
     )
 
 

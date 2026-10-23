@@ -57,6 +57,31 @@ def test_ctrl_v_then_start_returns_the_pasted_puzzle(
     assert result.grid == tuple(tuple(row) for row in UNIQUE_GRID)
 
 
+@pytest.mark.parametrize("key", [pygame.K_c, pygame.K_r])
+def test_plain_clear_shortcuts_still_clear_the_board(dialog, key) -> None:
+    dialog._replace_board(UNIQUE_GRID)
+
+    dialog._handle_keydown(
+        pygame.event.Event(pygame.KEYDOWN, key=key, unicode=chr(key), mod=0)
+    )
+
+    assert dialog.board == [[0] * 9 for _ in range(9)]
+    assert not dialog.conflicting_cells
+    assert dialog.running
+
+
+def test_plain_s_still_starts_the_solver(dialog) -> None:
+    dialog._replace_board(UNIQUE_GRID)
+
+    result = dialog._handle_keydown(
+        pygame.event.Event(pygame.KEYDOWN, key=pygame.K_s, unicode="s", mod=0)
+    )
+
+    assert isinstance(result, Puzzle)
+    assert result.grid == tuple(tuple(row) for row in UNIQUE_GRID)
+    assert not dialog.running
+
+
 def test_invalid_paste_preserves_the_existing_board(
     dialog: SudokuInputDialog, monkeypatch: pytest.MonkeyPatch
 ) -> None:

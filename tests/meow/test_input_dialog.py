@@ -237,3 +237,71 @@ def test_size_field_enter_creates_the_grid_without_starting_the_solver() -> None
     assert dialog.draft.size == 4
     assert dialog.draft.filled_count == 0
     assert dialog.running
+
+
+def test_initial_error_is_visible_without_replacing_the_draft() -> None:
+    dialog = MeowInputDialog(
+        initial_grid=(("A", "A"), ("B", "B")),
+        initial_error="현재 입력으로 가능한 해가 없습니다.",
+    )
+
+    assert dialog.validation_error == "현재 입력으로 가능한 해가 없습니다."
+    assert dialog.draft.grid == (("A", "A"), ("B", "B"))
+
+
+@pytest.mark.parametrize("mod", [pygame.KMOD_CTRL, pygame.KMOD_ALT, pygame.KMOD_GUI])
+@pytest.mark.parametrize(
+    ("key", "text"),
+    [(pygame.K_4, "4"), (pygame.K_BACKSPACE, ""), (pygame.K_RETURN, "\r")],
+)
+def test_size_field_ignores_command_modifiers(mod: int, key: int, text: str) -> None:
+    dialog = MeowInputDialog(initial_grid=(("A", "A"), ("B", "B")))
+    dialog._handle_editor_click(dialog.size_field_rect.center)
+    before = dialog.draft
+
+    dialog._handle_keydown(
+        pygame.event.Event(pygame.KEYDOWN, key=key, unicode=text, mod=mod)
+    )
+
+    assert dialog.size_text == "2"
+    assert dialog.draft is before
+    assert dialog.size_focused
+    assert dialog.running
+
+
+def test_size_field_tab_hands_focus_to_the_grid_before_navigation() -> None:
+    dialog = MeowInputDialog()
+    dialog._handle_editor_click(dialog.size_field_rect.center)
+
+    dialog._handle_keydown(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_TAB, mod=0))
+
+    assert not dialog.size_focused
+    assert dialog.selected_cell == (0, 0)
+
+
+def test_size_replacement_uses_the_shared_layout_at_small_sizes() -> None:
+    dialog = MeowInputDialog()
+    dialog.size_text = "2"
+
+    dialog._apply_size()
+
+    assert dialog.cell_size == 270
+    assert dialog.grid_width == 540
+    assert (dialog.grid_start_x, dialog.grid_start_y) == (45, 70)
+
+
+@pytest.mark.parametrize(
+    ("key", "text"), [(pygame.K_c, "c"), (pygame.K_r, "r"), (pygame.K_s, "s")]
+)
+def test_plain_shortcut_letters_remain_region_labels(key: int, text: str) -> None:
+    dialog = MeowInputDialog()
+    dialog.selected_cell = (0, 0)
+
+    result = dialog._handle_keydown(
+        pygame.event.Event(pygame.KEYDOWN, key=key, unicode=text, mod=0)
+    )
+
+    assert dialog.draft.grid[0][0] == text.upper()
+    assert dialog.selected_cell == (0, 1)
+    assert result is None
+    assert dialog.running

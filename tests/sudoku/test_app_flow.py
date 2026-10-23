@@ -7,6 +7,7 @@ from sample_puzzles import UNIQUE_GRID, UNIQUE_SOLUTION
 import puzzle_common.app as shared_app
 import sudoku.app as app_module
 from sudoku.board import Puzzle
+from sudoku.presentation import to_playback
 from sudoku.solve_types import SolveResult, SolveStatus, SolveStep, StepKind
 
 
@@ -80,7 +81,7 @@ def test_unsolvable_result_returns_to_editor_with_specific_message(
     asyncio.run(app_module.main())
 
     assert len(dialog_calls) == 2
-    assert "가능한 해가 없습니다" in str(dialog_calls[1]["initial_error"])
+    assert dialog_calls[1]["initial_error"] == shared_app.UNSOLVABLE_MESSAGE
     assert dialog_calls[1]["initial_board"] == puzzle.grid
     assert not visualizer_calls
     assert quit_calls == [None]
@@ -128,7 +129,7 @@ def test_solved_result_opens_visualizer_and_edit_returns_same_draft(
     asyncio.run(app_module.main())
 
     assert len(visualizer_calls) == 1
-    assert visualizer_calls[0] == (puzzle, solved_result)
+    assert visualizer_calls[0] == (puzzle, to_playback(solved_result))
     assert dialog_calls[1]["initial_board"] == puzzle.grid
     assert dialog_calls[1]["initial_error"] is None
     assert quit_calls == [None]

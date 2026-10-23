@@ -41,6 +41,8 @@ Pull request에서도 두 앱의 웹 빌드를 검사하며, 배포는 `main`에
 - `puzzle_common/input_dialog.py`: 입력 레이아웃·버튼·프리셋·메시지·JSON/클립보드·이벤트 루프
 - `puzzle_common/playback.py`: 풀이 패널·단계 이동·길게 누르기·자동 재생·이벤트 루프
 - `puzzle_common/app.py`: 시작·편집·풀이·재생·편집 복귀·종료 흐름
+- `puzzle_common/presentation.py`, 각 앱의 `presentation.py`: 공통 해 분류·단계 목록과 기존 솔버 결과의 연결
+- `puzzle_common/layout.py`: 양쪽 입력/재생의 같은 창·보드·패널 배치
 - `puzzle_common/`: 그 외 공통 폰트·그리기·좌표·클립보드·브라우저 입력·프리셋 파일 읽기
 - `main_meow.py`, `main_sudoku.py`: 웹 빌드용 진입점
 - `scripts/build_web.py`: 두 앱을 별도 번들로 빌드하고 선택 페이지 생성
@@ -51,3 +53,6 @@ Pull request에서도 두 앱의 웹 빌드를 검사하며, 배포는 `main`에
 통합 전 두 프로젝트의 Git 이력은 이 저장소에 보존되어 있습니다.
 
 공통 구현과 퍼즐 어댑터의 책임은 [구조 안내](docs/architecture.md)를 참고하세요.
+
+양쪽 앱은 방향키·Tab 이동, 결과 배지와 해 없음의 편집 복귀 방식을 공유합니다.
+알고리즘·퍼즐별 입력 규칙·숫자/후보 또는 고양이/색상 표현은 유지합니다.

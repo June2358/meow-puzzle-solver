@@ -21,10 +21,9 @@ class SudokuInputDialog(InputDialog[Puzzle]):
     json_description = "복사한 9×9 JSON을 아래 칸에 붙여넣고 불러오기를 누르세요."
     direct_instructions = (
         "칸 선택 · 1~9 입력 · 0/Delete 삭제",
-        "화살표 이동 · C/R 전체 삭제 · S 시작",
+        "화살표/Tab 이동 · C/R 전체 삭제 · S 시작",
     )
     parse_error = MatrixParseError
-    panel_width = 300
     start_keys = (*InputDialog.start_keys, pygame.K_s)
 
     def __init__(
@@ -37,9 +36,13 @@ class SudokuInputDialog(InputDialog[Puzzle]):
             self.board = [list(row) for row in validate_grid(initial_board)]
         self.conflicting_cells = find_conflicting_cells(self.board)
         self.puzzle_catalog = load_puzzle_catalog()
-        super().__init__(get_fonts(), tuple(self.puzzle_catalog), initial_error)
+        super().__init__(
+            get_fonts(), tuple(self.puzzle_catalog), initial_error, board_size=SIZE
+        )
 
     def _handle_editor_key(self, event: pygame.event.Event) -> bool:
+        if self._handle_grid_navigation(event):
+            return True
         if event.key in (pygame.K_r, pygame.K_c):
             self._replace_board([[0] * SIZE for _ in range(SIZE)])
         elif self.selected_cell is not None:
@@ -56,6 +59,8 @@ class SudokuInputDialog(InputDialog[Puzzle]):
         self._clear_message()
 
     def _set_cell(self, row: int, col: int, value: int) -> None:
+        if self.board[row][col] == value:
+            return
         self.board[row][col] = value
         self.conflicting_cells = find_conflicting_cells(self.board)
         self._clear_message()
@@ -132,8 +137,6 @@ class SudokuInputDialog(InputDialog[Puzzle]):
 
     def _handle_cell_input(self, event: pygame.event.Event) -> None:
         assert self.selected_cell is not None
-        if self._handle_grid_navigation(event):
-            return
         row, col = self.selected_cell
         if event.key in (
             pygame.K_DELETE,

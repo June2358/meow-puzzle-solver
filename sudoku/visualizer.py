@@ -557,10 +557,8 @@ class SudokuVisualizer:
         if self._active_navigation_source != source:
             return
 
-        self._active_navigation_source = (
-            next(reversed(self._held_navigation_sources), None)
-            if self._held_navigation_sources
-            else None
+        self._active_navigation_source = next(
+            reversed(self._held_navigation_sources), None
         )
         self._navigation_repeat_timer = 0.0
         self._navigation_repeat_started = False

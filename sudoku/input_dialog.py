@@ -530,11 +530,9 @@ class SudokuInputDialog:
         self._show_notice(f"{difficulty} 퍼즐을 불러왔습니다.")
 
     def _point_in_grid(self, position: tuple[int, int]) -> bool:
-        x, y = position
-        return (
-            self.grid_start_x <= x < self.grid_start_x + self.grid_width
-            and self.grid_start_y <= y < self.grid_start_y + self.grid_width
-        )
+        return pygame.Rect(
+            self.grid_start_x, self.grid_start_y, self.grid_width, self.grid_width
+        ).collidepoint(position)
 
     def _handle_cell_input(self, event: pygame.event.Event) -> None:
         assert self.selected_cell is not None

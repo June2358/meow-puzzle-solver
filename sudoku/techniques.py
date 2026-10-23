@@ -123,9 +123,7 @@ def find_full_house(
     return TechniqueResult(
         technique=Technique.FULL_HOUSE,
         assignments=assignments,
-        evidence_cells=tuple(
-            dict.fromkeys(assignment.cell for assignment in assignments)
-        ),
+        evidence_cells=tuple(assignment.cell for assignment in assignments),
         context_cells=context_cells,
         explanation=explanation,
     )
@@ -204,9 +202,7 @@ def find_hidden_single(
     return TechniqueResult(
         technique=Technique.HIDDEN_SINGLE,
         assignments=assignments,
-        evidence_cells=tuple(
-            dict.fromkeys(assignment.cell for assignment in assignments)
-        ),
+        evidence_cells=tuple(assignment.cell for assignment in assignments),
         context_cells=context_cells,
         explanation=explanation,
     )

@@ -56,9 +56,7 @@ class SolverState:
             return {value}
 
         peer_values = {
-            self._values[peer_row][peer_col]
-            for peer_row, peer_col in PEERS[cell]
-            if self._values[peer_row][peer_col] != 0
+            self._values[peer_row][peer_col] for peer_row, peer_col in PEERS[cell]
         }
         return set(DIGITS - peer_values)
 

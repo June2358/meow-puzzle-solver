@@ -12,6 +12,8 @@ from collections.abc import Callable, Iterator
 from itertools import combinations
 from typing import Final
 
+from puzzle_common.coordinates import cell_name as _cell_name
+
 from .board import Grid
 from .solve_types import (
     Assignment,
@@ -35,11 +37,6 @@ from .topology import (
 
 type _TechniqueFinder = Callable[[Grid, CandidateGrid], TechniqueResult | None]
 type _NakedSubsetPattern = tuple[tuple[Cell, ...], frozenset[int]]
-
-
-def _cell_name(cell: Cell) -> str:
-    row, col = cell
-    return f"R{row + 1}C{col + 1}"
 
 
 def _unit_name(unit_index: int) -> str:

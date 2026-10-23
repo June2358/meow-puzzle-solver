@@ -11,7 +11,7 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 import pygame
 import pytest
 
-import meow.input_dialog as input_dialog_module
+import puzzle_common.input_dialog as input_dialog_module
 from meow.input_dialog import MeowInputDialog
 from meow.puzzle_catalog import load_preset
 from puzzle_common.web_text_dialog import WebTextDialogResult
@@ -132,8 +132,8 @@ def test_web_json_submit_reuses_parser_then_closes_on_success(
     monkeypatch.setattr(input_dialog_module, "is_web_runtime", lambda: True)
     monkeypatch.setattr(
         input_dialog_module,
-        "open_json_dialog",
-        lambda: browser_dialog,
+        "WebTextDialog",
+        lambda **kwargs: browser_dialog,
     )
 
     dialog._handle_json_action()
@@ -158,8 +158,8 @@ def test_invalid_web_json_preserves_text_dialog_and_draft(
     monkeypatch.setattr(input_dialog_module, "is_web_runtime", lambda: True)
     monkeypatch.setattr(
         input_dialog_module,
-        "open_json_dialog",
-        lambda: browser_dialog,
+        "WebTextDialog",
+        lambda **kwargs: browser_dialog,
     )
 
     dialog._handle_json_action()
@@ -194,3 +194,46 @@ def test_run_yields_a_frame_then_handles_a_quit_event(
     assert asyncio.run(dialog.run()) is None
     assert draw_calls == [None]
     assert len(frame_calls) == 1
+
+
+def test_region_drag_stops_when_the_button_is_released() -> None:
+    dialog = MeowInputDialog(initial_grid=(("A", "A"), ("B", "B")))
+    x = dialog.grid_start_x + dialog.cell_size // 2
+    y = dialog.grid_start_y + dialog.cell_size // 2
+    dialog._handle_events(
+        [
+            pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=(x, y)),
+            pygame.event.Event(
+                pygame.MOUSEMOTION, pos=(x, y + dialog.cell_size), buttons=(1, 0, 0)
+            ),
+            pygame.event.Event(
+                pygame.MOUSEBUTTONUP, button=1, pos=(x, y + dialog.cell_size)
+            ),
+            pygame.event.Event(
+                pygame.MOUSEMOTION,
+                pos=(x + dialog.cell_size, y + dialog.cell_size),
+                buttons=(1, 0, 0),
+            ),
+        ]
+    )
+
+    assert dialog.draft.grid == (("A", "A"), ("A", "B"))
+
+
+def test_size_field_enter_creates_the_grid_without_starting_the_solver() -> None:
+    dialog = MeowInputDialog(initial_grid=(("A", "A"), ("B", "B")))
+    dialog._handle_events(
+        [
+            pygame.event.Event(
+                pygame.MOUSEBUTTONDOWN, button=1, pos=dialog.size_field_rect.center
+            ),
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_4, unicode="4", mod=0),
+            pygame.event.Event(
+                pygame.KEYDOWN, key=pygame.K_RETURN, unicode="\r", mod=0
+            ),
+        ]
+    )
+
+    assert dialog.draft.size == 4
+    assert dialog.draft.filled_count == 0
+    assert dialog.running

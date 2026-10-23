@@ -4,13 +4,19 @@ from __future__ import annotations
 
 import pygame
 
-from .ui_style import BLACK, WHITE, Color
+from .ui_style import BLACK, BORDER, LIGHT_GRAY, WHITE, Color
 
 _BUTTON_BORDER_RADIUS = 10
 _BUTTON_SHADOW_OFFSET = 2
 _BUTTON_SHADOW_ALPHA = 24
 _BUTTON_HOVER_BRIGHTNESS = 12
 _BUTTON_BORDER_DARKEN = 22
+
+
+def draw_panel(screen: pygame.Surface, rect: pygame.Rect) -> None:
+    pygame.draw.rect(screen, LIGHT_GRAY, rect.move(0, 4), border_radius=14)
+    pygame.draw.rect(screen, WHITE, rect, border_radius=14)
+    pygame.draw.rect(screen, BORDER, rect, width=1, border_radius=14)
 
 
 class Button:

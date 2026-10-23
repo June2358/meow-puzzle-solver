@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+from puzzle_common.json_input import decode_json
 
 from .model import InvalidRegionMapError, Puzzle
 
@@ -18,19 +18,7 @@ def parse_puzzle_json(text: str) -> Puzzle:
     array of region-label strings. No metadata or solution fields are accepted.
     """
 
-    if not isinstance(text, str):
-        raise TypeError("JSON 퍼즐 입력은 문자열이어야 합니다.")
-
-    try:
-        document = json.loads(text)
-    except json.JSONDecodeError as error:
-        raise PuzzleParseError(
-            f"올바른 JSON이 아닙니다: {error.lineno}행 {error.colno}열"
-        ) from error
-    except (RecursionError, ValueError) as error:
-        raise PuzzleParseError(
-            "JSON이 너무 복잡하거나 지원하지 않는 값이 있습니다."
-        ) from error
+    document = decode_json(text, PuzzleParseError)
 
     if not isinstance(document, dict):
         raise PuzzleParseError("JSON 최상위 값은 객체여야 합니다.")

@@ -1,9 +1,8 @@
 """Top-level pygame flow for editing and solving MEOW Queens puzzles."""
 
-import pygame
+from puzzle_common.app import run_app
 
 from .input_dialog import MeowInputDialog
-from .model import RegionGrid
 from .solver import solve
 from .visualizer import MeowVisualizer
 
@@ -11,24 +10,9 @@ from .visualizer import MeowVisualizer
 async def main() -> None:
     """Run one input/solve/visualize loop until either screen closes."""
 
-    pygame.init()
-    pygame.key.stop_text_input()
-    draft: RegionGrid | None = None
-
-    try:
-        while True:
-            dialog = MeowInputDialog(initial_grid=draft)
-            puzzle = await dialog.run()
-            if puzzle is None:
-                return
-
-            draft = puzzle.region_grid
-            result = solve(puzzle)
-
-            visualizer = MeowVisualizer(puzzle, result)
-            draft_for_editing = await visualizer.run()
-            if draft_for_editing is None:
-                return
-            draft = draft_for_editing
-    finally:
-        pygame.quit()
+    await run_app(
+        lambda draft, error: MeowInputDialog(initial_grid=draft),
+        solve,
+        MeowVisualizer,
+        lambda puzzle: puzzle.region_grid,
+    )

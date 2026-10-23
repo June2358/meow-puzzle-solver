@@ -66,6 +66,22 @@ def test_core_frames_render(stalled_probe_puzzle: Puzzle) -> None:
         if frame.kind is TimelineKind.LOGIC_STEP and frame.active_assumption is not None
     )
     visualizer.draw()
+    details = visualizer._presentation()
+    assert details.assumption.endswith(" = 고양이")
+    assert details.annotations
+
+
+def test_presentation_keeps_structured_effects_and_reason() -> None:
+    puzzle = load_preset("쉬움")
+    visualizer = MeowVisualizer(puzzle, solve(puzzle))
+    visualizer.current_step_index = 1
+
+    details = visualizer._presentation()
+
+    assert details.title == "Basic Deductions"
+    assert "R1C3" in details.reason
+    assert details.effects == (("고양이 확정 · 1", ("R1C3 = 고양이",)),)
+    assert details.region_colors
 
 
 def test_all_exact_results_render_a_final_badge() -> None:
@@ -121,7 +137,7 @@ def test_related_region_chip_uses_the_board_region_color() -> None:
 
     x, y = 10, 10
     visualizer.screen.fill((255, 255, 255))
-    visualizer._draw_region_chips(x, y)
+    visualizer._draw_region_chips(visualizer._presentation().region_colors, x, y)
     chip_y = y + 5
     label_width = visualizer.fonts.candidate.size("관련 색상 영역")[0]
     chip_size = max(16, visualizer.fonts.candidate.get_height() - 1)
@@ -143,7 +159,7 @@ def test_escape_returns_the_region_grid(
         return 1 / 60
 
     monkeypatch.setattr(
-        "meow.visualizer.next_frame",
+        "puzzle_common.playback.next_frame",
         advance_frame,
     )
     monkeypatch.setattr(

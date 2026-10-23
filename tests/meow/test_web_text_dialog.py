@@ -2,10 +2,12 @@ import json
 from html import unescape
 from types import SimpleNamespace
 
+import pygame
 import pytest
 
+import puzzle_common.input_dialog as common_input
 import puzzle_common.web_text_dialog as web_text_dialog
-from meow.web_text_dialog import open_json_dialog, open_prompt_dialog
+from meow.input_dialog import MeowInputDialog
 
 
 class FakeElement:
@@ -89,6 +91,16 @@ def document(monkeypatch: pytest.MonkeyPatch) -> FakeDocument:
     return fake
 
 
+@pytest.fixture
+def input_screen(document, monkeypatch):
+    pygame.init()
+    monkeypatch.setattr(common_input, "is_web_runtime", lambda: True)
+    screen = MeowInputDialog()
+    yield screen
+    screen._close_web_text_dialog()
+    pygame.quit()
+
+
 def _find_by_text(document: FakeDocument, text: str) -> FakeElement | None:
     return next(
         (node for node in document.body.descendants() if node.textContent == text),
@@ -98,8 +110,11 @@ def _find_by_text(document: FakeDocument, text: str) -> FakeElement | None:
 
 def test_json_dialog_returns_exact_json_and_stays_open_for_validation(
     document: FakeDocument,
+    input_screen,
 ) -> None:
-    dialog = open_json_dialog()
+    input_screen._handle_json_action()
+    dialog = input_screen._web_text_dialog
+    assert dialog is not None
     overlay = document.getElementById(web_text_dialog._OVERLAY_ID)
     textarea = document.getElementById(web_text_dialog._TEXTAREA_ID)
     error = document.getElementById(web_text_dialog._ERROR_ID)
@@ -152,9 +167,13 @@ def test_json_dialog_returns_exact_json_and_stays_open_for_validation(
 
 def test_prompt_dialog_preserves_unicode_through_the_ascii_dom_bridge(
     document: FakeDocument,
+    input_screen,
 ) -> None:
     prompt = '영역 JSON 전사 <>&\n한글과 따옴표 "그대로"'
-    dialog = open_prompt_dialog(prompt)
+    input_screen.prompt = prompt
+    input_screen._handle_prompt_action()
+    dialog = input_screen._web_text_dialog
+    assert dialog is not None
     textarea = document.getElementById(web_text_dialog._TEXTAREA_ID)
 
     assert textarea is not None

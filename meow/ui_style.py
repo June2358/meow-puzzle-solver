@@ -7,7 +7,13 @@ from functools import cache
 
 import pygame
 
-from puzzle_common.ui_style import GRID_LINE, GRID_REGION_LINE, Color, Fonts
+from puzzle_common.ui_style import (
+    GRID_LINE,
+    GRID_REGION_LINE,
+    Color,
+    Fonts,
+    draw_grid_lines,
+)
 from puzzle_common.ui_style import get_fonts as load_fonts
 
 from .model import RegionGrid
@@ -50,25 +56,7 @@ def draw_region_grid_lines(
         raise ValueError("셀 크기는 양수여야 합니다.")
     size = len(region_grid)
     start_x, start_y = origin
-    board_size = size * cell_size
-
-    for index in range(size + 1):
-        x = start_x + index * cell_size
-        y = start_y + index * cell_size
-        pygame.draw.line(
-            screen,
-            GRID_LINE,
-            (x, start_y),
-            (x, start_y + board_size),
-            cell_width,
-        )
-        pygame.draw.line(
-            screen,
-            GRID_LINE,
-            (start_x, y),
-            (start_x + board_size, y),
-            cell_width,
-        )
+    draw_grid_lines(screen, origin, cell_size, size, color=GRID_LINE, width=cell_width)
 
     for row in range(size):
         y1 = start_y + row * cell_size

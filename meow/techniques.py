@@ -10,16 +10,13 @@ from collections.abc import Callable, Sequence
 from itertools import combinations
 from typing import Final
 
+from puzzle_common.coordinates import cell_name as _cell_name
+
 from .model import Cell, Puzzle, Unit
 from .solve_types import Deduction, Technique, UnitKind, UnitRef
 from .state import LogicSnapshot
 
 TechniqueFinder = Callable[[LogicSnapshot], Deduction | None]
-
-
-def _cell_name(cell: Cell) -> str:
-    row, column = cell
-    return f"R{row + 1}C{column + 1}"
 
 
 def _kind_name(kind: UnitKind) -> str:

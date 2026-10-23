@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from puzzle_common.coordinates import cell_name as _cell_name
+
 from .exact_solver import ExactStatus
 from .model import Cell
 from .solve_types import (
@@ -63,10 +65,6 @@ _PROBE_END_TITLES = {
 
 _PROBING_LABEL = SOLVER_ALGORITHM_LABELS[SolverAlgorithm.SINGLETON_PROBING]
 _SEARCH_LABEL = SOLVER_ALGORITHM_LABELS[SolverAlgorithm.BACKTRACK_SEARCH]
-
-
-def _cell_name(cell: Cell) -> str:
-    return f"R{cell[0] + 1}C{cell[1] + 1}"
 
 
 def _cells_text(cells: tuple[Cell, ...]) -> str:

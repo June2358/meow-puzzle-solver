@@ -1,6 +1,6 @@
 """Strict parser for the external AI/OCR matrix contract."""
 
-import json
+from puzzle_common.json_input import decode_json
 
 from .board import Grid, InvalidBoardError, validate_grid
 
@@ -12,15 +12,7 @@ class MatrixParseError(ValueError):
 def parse_matrix_json(text: str) -> Grid:
     """Parse a raw JSON 9x9 integer array without applying Sudoku rules."""
 
-    if not isinstance(text, str):
-        raise TypeError("매트릭스 JSON은 str이어야 합니다.")
-
-    try:
-        decoded = json.loads(text)
-    except json.JSONDecodeError as exc:
-        raise MatrixParseError(
-            f"올바른 JSON 배열이 아닙니다: {exc.msg} (줄 {exc.lineno}, 열 {exc.colno})"
-        ) from exc
+    decoded = decode_json(text, MatrixParseError)
 
     if type(decoded) is not list:
         raise MatrixParseError("최상위 JSON 값은 9개 행을 가진 배열이어야 합니다.")

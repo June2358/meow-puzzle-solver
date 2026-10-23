@@ -5,13 +5,14 @@ import asyncio
 import pytest
 
 import meow.app as app_module
+import puzzle_common.app as shared_app
 from meow.puzzle_catalog import load_preset
 
 
 def _disable_pygame(monkeypatch: pytest.MonkeyPatch, lifecycle: list[str]) -> None:
-    monkeypatch.setattr(app_module.pygame, "init", lambda: lifecycle.append("init"))
-    monkeypatch.setattr(app_module.pygame, "quit", lambda: lifecycle.append("quit"))
-    monkeypatch.setattr(app_module.pygame.key, "stop_text_input", lambda: None)
+    monkeypatch.setattr(shared_app.pygame, "init", lambda: lifecycle.append("init"))
+    monkeypatch.setattr(shared_app.pygame, "quit", lambda: lifecycle.append("quit"))
+    monkeypatch.setattr(shared_app.pygame.key, "stop_text_input", lambda: None)
 
 
 def test_solve_once_then_edit_restores_the_same_region_grid(

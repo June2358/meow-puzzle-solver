@@ -4,37 +4,46 @@ import meow.input_dialog as meow_input
 import meow.visualizer as meow_visualizer
 import sudoku.input_dialog as sudoku_input
 import sudoku.visualizer as sudoku_visualizer
+from puzzle_common.input_dialog import InputDialog
+from puzzle_common.playback import PlaybackScreen
 from puzzle_common.ui_style import Fonts
 
 
 @pytest.mark.parametrize(
     "name",
     (
-        "Button",
-        "next_frame",
-        "configure_display",
-        "wrap_text",
-        "ClipboardError",
-        "copy_text",
-        "paste_text",
-        "WebTextDialog",
-        "WebTextDialogError",
-        "is_web_runtime",
+        "draw",
+        "_draw_panel",
+        "_draw_instructions",
+        "_draw_message",
+        "_handle_events",
+        "_handle_mouse_click",
+        "_handle_keydown",
+        "_handle_prompt_action",
+        "_handle_json_action",
+        "_paste_json",
+        "_poll_web_text_dialog",
+        "_close_web_text_dialog",
+        "_handle_start",
+        "_handle_grid_navigation",
+        "_move_direction",
+        "run",
     ),
 )
-def test_input_screens_use_the_same_shared_implementation(name: str) -> None:
-    implementation = getattr(meow_input, name)
+def test_input_screens_inherit_the_full_common_screen(name: str) -> None:
+    implementation = getattr(InputDialog, name)
+    assert getattr(meow_input.MeowInputDialog, name) is implementation
+    assert getattr(sudoku_input.SudokuInputDialog, name) is implementation
 
-    assert implementation is getattr(sudoku_input, name)
-    assert implementation.__module__.startswith("puzzle_common.")
 
-
-@pytest.mark.parametrize("name", ("Button", "next_frame", "configure_display"))
-def test_playback_screens_share_the_input_screens_implementation(name: str) -> None:
-    implementation = getattr(meow_input, name)
-
-    assert implementation is getattr(meow_visualizer, name)
-    assert implementation is getattr(sudoku_visualizer, name)
+@pytest.mark.parametrize(
+    "name",
+    ("draw", "run", "_draw_panel", "_handle_events", "_navigate", "_update_autoplay"),
+)
+def test_playback_screens_inherit_the_full_common_screen(name: str) -> None:
+    implementation = getattr(PlaybackScreen, name)
+    assert getattr(meow_visualizer.MeowVisualizer, name) is implementation
+    assert getattr(sudoku_visualizer.SudokuVisualizer, name) is implementation
 
 
 def test_shared_fonts_keep_the_two_apps_number_and_candidate_sizes() -> None:

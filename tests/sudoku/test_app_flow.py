@@ -4,6 +4,7 @@ from collections.abc import Iterator
 import pytest
 from sample_puzzles import UNIQUE_GRID, UNIQUE_SOLUTION
 
+import puzzle_common.app as shared_app
 import sudoku.app as app_module
 from sudoku.board import Puzzle
 from sudoku.solve_types import SolveResult, SolveStatus, SolveStep, StepKind
@@ -72,9 +73,9 @@ def test_unsolvable_result_returns_to_editor_with_specific_message(
     monkeypatch.setattr(app_module, "SudokuInputDialog", FakeDialog)
     monkeypatch.setattr(app_module, "SudokuSolver", FakeSolver)
     monkeypatch.setattr(app_module, "SudokuVisualizer", ForbiddenVisualizer)
-    monkeypatch.setattr(app_module.pygame, "init", lambda: None)
-    monkeypatch.setattr(app_module.pygame.key, "stop_text_input", lambda: None)
-    monkeypatch.setattr(app_module.pygame, "quit", lambda: quit_calls.append(None))
+    monkeypatch.setattr(shared_app.pygame, "init", lambda: None)
+    monkeypatch.setattr(shared_app.pygame.key, "stop_text_input", lambda: None)
+    monkeypatch.setattr(shared_app.pygame, "quit", lambda: quit_calls.append(None))
 
     asyncio.run(app_module.main())
 
@@ -120,9 +121,9 @@ def test_solved_result_opens_visualizer_and_edit_returns_same_draft(
     monkeypatch.setattr(app_module, "SudokuInputDialog", FakeDialog)
     monkeypatch.setattr(app_module, "SudokuSolver", FakeSolver)
     monkeypatch.setattr(app_module, "SudokuVisualizer", FakeVisualizer)
-    monkeypatch.setattr(app_module.pygame, "init", lambda: None)
-    monkeypatch.setattr(app_module.pygame.key, "stop_text_input", lambda: None)
-    monkeypatch.setattr(app_module.pygame, "quit", lambda: quit_calls.append(None))
+    monkeypatch.setattr(shared_app.pygame, "init", lambda: None)
+    monkeypatch.setattr(shared_app.pygame.key, "stop_text_input", lambda: None)
+    monkeypatch.setattr(shared_app.pygame, "quit", lambda: quit_calls.append(None))
 
     asyncio.run(app_module.main())
 
@@ -146,9 +147,9 @@ def test_pygame_quits_when_async_screen_flow_raises(
             raise RuntimeError("screen failed")
 
     monkeypatch.setattr(app_module, "SudokuInputDialog", FailingDialog)
-    monkeypatch.setattr(app_module.pygame, "init", lambda: None)
-    monkeypatch.setattr(app_module.pygame.key, "stop_text_input", lambda: None)
-    monkeypatch.setattr(app_module.pygame, "quit", lambda: quit_calls.append(None))
+    monkeypatch.setattr(shared_app.pygame, "init", lambda: None)
+    monkeypatch.setattr(shared_app.pygame.key, "stop_text_input", lambda: None)
+    monkeypatch.setattr(shared_app.pygame, "quit", lambda: quit_calls.append(None))
 
     with pytest.raises(RuntimeError, match="screen failed"):
         asyncio.run(app_module.main())

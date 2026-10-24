@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "MEOW Queens and Sudoku solvers with shared pygame infrastructure"
 authors = [{ name = "Lim Junmin", email = "dsgoat99@naver.com" }]
 readme = "README.md"
-requires-python = ">=3.12.15,<3.13"
+requires-python = ">=3.14,<3.15"
 dependencies = [
     "pygame-ce==2.5.8",
 ]
@@ -13,9 +13,6 @@ dependencies = [
 dev = [
     "pytest==9.1.1",
     "ruff==0.17.2",
-]
-web = [
-    "pygbag==0.9.3",
 ]
 
 [tool.uv]
@@ -27,7 +24,7 @@ addopts = "-W error --import-mode=importlib"
 pythonpath = [".", "tests/sudoku"]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "B", "I", "UP", "SIM", "PERF"]

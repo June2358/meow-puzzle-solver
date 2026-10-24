@@ -12,7 +12,7 @@ MEOW Queens와 Sudoku를 하나의 pygame-ce 앱에서 입력하고 풀고 재�
 
 ## 실행
 
-Python 3.12.15와 uv를 사용합니다.
+Python 3.14.9와 uv를 사용합니다.
 
 ```powershell
 uv sync --locked
@@ -38,15 +38,18 @@ uv run python -m pytest -q -W error
 ## 웹 빌드
 
 ```powershell
-uv sync --locked --group web
-uv run python scripts/build_web.py
-uv run python -m http.server 8765 --directory build/web
+uv run --no-project python scripts/build_web.py
+uv run --no-project python -m http.server 8765 --directory build/web
 ```
 
 `http://localhost:8765/`에서 앱 안의 선택 화면을 엽니다.
-두 퍼즐과 공통 자산을 포함한 Pygbag 번들을 한 번 빌드하고 `build/web`에 배치합니다.
+PyScript 2026.7.3의 pygame-ce 지원을 사용하며 두 퍼즐과 공통 자산을 하나의
+`runtime.zip`으로 묶어 `build/web`에 배치합니다. 빌드에는 Python 표준 라이브러리만 사용하며,
+웹 앱의 초기 로딩에는 인터넷 연결이 필요합니다.
+브라우저에서는 PyScript에 포함된 Python 3.14 실행기를 사용합니다.
 기존 `/meow/`, `/sudoku/` 주소는 각각 `/?puzzle=meow`, `/?puzzle=sudoku`로 이동하며
 같은 앱에서 해당 모드로 시작합니다. 모드를 바꿀 때 페이지를 다시 불러오지 않습니다.
+기존 `/pyscript/` 주소도 쿼리를 유지한 채 기본 주소로 이동합니다.
 
 GitHub Actions는 pull request에서 웹 빌드를 검사하고 `main` 갱신 시 같은 산출물을 Pages에 배포합니다.
 새 GitHub 저장소에서는 Settings → Pages → Source를 GitHub Actions로 선택합니다.

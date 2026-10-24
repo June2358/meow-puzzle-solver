@@ -173,14 +173,17 @@ def test_failure_always_closes_pygame(monkeypatch, lifecycle, stage):
     assert lifecycle == ["init", "quit"]
 
 
-def test_browser_query_is_validated_at_composition_root(monkeypatch):
-    import platform
+def test_browser_query_and_dialog_use_the_pyodide_bridge(monkeypatch):
+    import sys
+
+    from puzzle_common.web_text_dialog import _browser_document
 
     monkeypatch.setattr(app, "sys", SimpleNamespace(platform="emscripten"))
     location = SimpleNamespace(search="?puzzle=sudoku")
-    monkeypatch.setattr(
-        platform, "window", SimpleNamespace(location=location), raising=False
-    )
+    document = object()
+    window = SimpleNamespace(location=location, document=document)
+    monkeypatch.setitem(sys.modules, "js", SimpleNamespace(window=window))
+    assert _browser_document() is document
     assert app._browser_initial_key() == "sudoku"
     location.search = "?puzzle=unknown"
     assert app._browser_initial_key() is None

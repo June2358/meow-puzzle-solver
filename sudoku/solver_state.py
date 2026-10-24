@@ -62,7 +62,7 @@ class SolverState:
         }
         return set(DIGITS - peer_values)
 
-    def clone(self) -> "SolverState":
+    def clone(self) -> SolverState:
         clone = object.__new__(type(self))
         clone._values = [row[:] for row in self._values]
         clone._candidates = [

@@ -3,7 +3,8 @@
 import sys
 from contextlib import suppress
 from dataclasses import dataclass
-from html import escape
+
+from .runtime import browser_window
 
 _OVERLAY_ID = "puzzle-text-dialog-overlay"
 _TEXTAREA_ID = "puzzle-text-dialog-textarea"
@@ -23,31 +24,18 @@ class WebTextDialogResult:
 
 
 def is_web_runtime() -> bool:
-    """Return whether the application is running in Pygbag's browser runtime."""
+    """Return whether the application is running in a browser WebAssembly runtime."""
 
     return sys.platform == "emscripten"
 
 
 def _browser_document():  # noqa: ANN202
     try:
-        import platform
-
-        return platform.document
+        return browser_window().document
     except (AttributeError, ImportError) as exc:
         raise WebTextDialogError(
             "브라우저의 텍스트 입력 기능을 사용할 수 없습니다."
         ) from exc
-
-
-def _ascii_html_text(text: str) -> str:
-    """Encode safe visible text as ASCII-only HTML for the Pygbag DOM bridge."""
-
-    escaped = escape(text, quote=False)
-    return escaped.encode("ascii", "xmlcharrefreplace").decode("ascii")
-
-
-def _set_dom_text(element, text: str) -> None:  # noqa: ANN001
-    element.innerHTML = _ascii_html_text(text)
 
 
 class WebTextDialog:
@@ -87,7 +75,7 @@ class WebTextDialog:
         editable: bool,
     ) -> None:
         existing = self._document.getElementById(_OVERLAY_ID)
-        if existing is not None:
+        if existing:
             existing.remove()
 
         overlay = self._document.createElement("div")
@@ -117,14 +105,14 @@ class WebTextDialog:
 
         heading = self._document.createElement("h2")
         heading.id = "puzzle-text-dialog-title"
-        _set_dom_text(heading, title)
+        heading.textContent = title
         heading.style.cssText = (
             "margin:0;color:#172554;font:700 22px/1.3 system-ui,sans-serif;"
         )
         card.appendChild(heading)
 
         help_text = self._document.createElement("p")
-        _set_dom_text(help_text, description)
+        help_text.textContent = description
         help_text.style.cssText = (
             "margin:0;color:#475569;font:16px/1.5 system-ui,sans-serif;"
         )
@@ -134,7 +122,7 @@ class WebTextDialog:
         self._textarea = textarea
         textarea.id = _TEXTAREA_ID
         textarea.rows = 12
-        _set_dom_text(textarea, text)
+        textarea.value = text
         textarea.autocapitalize = "off"
         textarea.autocomplete = "off"
         textarea.spellcheck = False
@@ -153,7 +141,7 @@ class WebTextDialog:
         error = self._document.createElement("p")
         self._error = error
         error.id = _ERROR_ID
-        _set_dom_text(error, "")
+        error.textContent = ""
         error.hidden = True
         error.setAttribute("role", "alert")
         error.style.cssText = (
@@ -179,7 +167,7 @@ class WebTextDialog:
     def _button(self, label: str, action: str, *, primary: bool = False):  # noqa: ANN202
         button = self._document.createElement("button")
         button.type = "button"
-        _set_dom_text(button, label)
+        button.textContent = label
         background = "#1e3a8a" if primary else "#f8fafc"
         color = "#fff" if primary else "#172554"
         button.style.cssText = (
@@ -224,7 +212,7 @@ class WebTextDialog:
         if self._error is None or self._textarea is None:
             raise WebTextDialogError("브라우저 입력 오류를 표시할 수 없습니다.")
         try:
-            _set_dom_text(self._error, message)
+            self._error.textContent = message
             self._error.hidden = False
             self._textarea.focus()
         except Exception as exc:
@@ -253,7 +241,7 @@ class WebTextDialog:
     def _focus_canvas(self) -> None:
         with suppress(Exception):
             canvas = self._document.querySelector("canvas")
-            if canvas is not None:
+            if canvas:
                 canvas.focus()
 
     def _remove_partial_overlay(self) -> None:

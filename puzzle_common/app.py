@@ -12,7 +12,7 @@ from .engine import Outcome
 from .input_dialog import InputDialog
 from .layout import get_board_layout
 from .playback import PlaybackScreen
-from .runtime import next_frame
+from .runtime import browser_window, next_frame
 from .ui_components import Button, draw_panel
 from .ui_style import APP_BACKGROUND, PRIMARY_DARK, configure_display, get_fonts
 from .view import Grid
@@ -100,9 +100,7 @@ class PuzzleSelector:
 def _browser_initial_key() -> str | None:
     if sys.platform != "emscripten":
         return None
-    import platform
-
-    key = parse_qs(str(platform.window.location.search).lstrip("?")).get(
+    key = parse_qs(str(browser_window().location.search).lstrip("?")).get(
         "puzzle", [None]
     )[0]
     return key if any(definition.key == key for definition in DEFINITIONS) else None

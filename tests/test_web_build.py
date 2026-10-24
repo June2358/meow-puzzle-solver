@@ -1,6 +1,6 @@
 import shutil
-from pathlib import Path
-from types import SimpleNamespace
+import tomllib
+from zipfile import ZipFile
 
 import pytest
 
@@ -82,61 +82,68 @@ def test_invalid_runtime_preserves_previous_stage(monkeypatch, tmp_path, missing
     assert (stage / "keep.txt").is_file()
 
 
-def test_build_publishes_one_apk_with_compatibility_redirects(monkeypatch, tmp_path):
+def test_build_publishes_one_pyscript_bundle_with_compatibility_redirects(
+    monkeypatch, tmp_path
+):
     project = _configure_fake_project(monkeypatch, tmp_path)
-    monkeypatch.delenv("PYTHONUTF8", raising=False)
     web = project / "build/web"
     web.mkdir(parents=True)
     (web / "stale.txt").write_text("stale")
-    calls = []
+    cache = project / "meow/__pycache__"
+    cache.mkdir()
+    (cache / "module.pyc").write_bytes(b"cache")
+    (project / "secret.txt").write_text("not runtime")
 
-    def fake_run(command, *, cwd, env, check):
-        calls.append(SimpleNamespace(command=command, cwd=cwd, env=env, check=check))
-        output = Path(command[-1]) / "build/web"
-        output.mkdir(parents=True)
-        (output / "index.html").write_text("<html>shared app</html>", encoding="utf-8")
-        (output / "puzzle-solvers.apk").write_bytes(b"apk")
-        (output / "runtime.js").write_text("// runtime")
-
-    monkeypatch.setattr(build_web.subprocess, "run", fake_run)
     build_web.build_web()
-    assert len(calls) == 1
-    assert calls[0].cwd == project and calls[0].check is True
-    assert calls[0].env["PYTHONUTF8"] == "1"
+
     assert {
         path.relative_to(web).as_posix() for path in web.rglob("*") if path.is_file()
     } == {
         "index.html",
-        "puzzle-solvers.apk",
-        "runtime.js",
+        "pyscript.toml",
+        "runtime.zip",
         "meow/index.html",
         "sudoku/index.html",
+        "pyscript/index.html",
     }
-    assert (web / "index.html").read_text() == "<html>shared app</html>"
+    with ZipFile(web / "runtime.zip") as archive:
+        names = set(archive.namelist())
+        assert "meow/data.json" in names and "sudoku/data.json" in names
+        font = "puzzle_common/assets/fonts/Pretendard-Regular.otf"
+        assert archive.read(font) == (project / font).read_bytes()
+        assert "main.py" in names
+        assert not any("__pycache__" in name or "secret.txt" in name for name in names)
+        assert all(not name.startswith("/") and "\\" not in name for name in names)
+    config = tomllib.loads((web / "pyscript.toml").read_text(encoding="utf-8"))
+    assert config["files"] == {"./runtime.zip": "./*"}
+    html = (web / "index.html").read_text(encoding="utf-8")
+    assert "https://pyscript.net/releases/2026.7.3/core.js" in html
+    assert 'id="canvas"' in html and 'type="py-game"' in html
+    assert 'config="pyscript.toml"' in html and "await run_app()" in html
     for key in ("meow", "sudoku"):
         redirect = (web / key / "index.html").read_text(encoding="utf-8")
         assert f"url=../?puzzle={key}" in redirect
         assert f'href="../?puzzle={key}"' in redirect
+    legacy = (web / "pyscript/index.html").read_text(encoding="utf-8")
+    assert 'location.replace("../" + location.search)' in legacy
+    assert 'href="../"' in legacy
 
 
-@pytest.mark.parametrize("missing", ("index.html", "APK"))
-def test_incomplete_output_preserves_previous_site(monkeypatch, tmp_path, missing):
+@pytest.mark.parametrize("missing", ("main.py", "meow", "sudoku", "puzzle_common"))
+def test_invalid_runtime_preserves_previous_site(monkeypatch, tmp_path, missing):
     project = _configure_fake_project(monkeypatch, tmp_path)
+    target = project / missing
+    if target.is_dir():
+        shutil.rmtree(target)
+    else:
+        target.unlink()
     web = project / "build/web"
     web.mkdir(parents=True)
     (web / "keep.txt").write_text("keep")
 
-    def fake_run(command, **kwargs):
-        output = Path(command[-1]) / "build/web"
-        output.mkdir(parents=True)
-        if missing != "index.html":
-            (output / "index.html").write_text("<html></html>")
-        if missing != "APK":
-            (output / "puzzle-solvers.apk").write_bytes(b"apk")
-
-    monkeypatch.setattr(build_web.subprocess, "run", fake_run)
-    with pytest.raises(RuntimeError, match=missing):
+    with pytest.raises(FileNotFoundError):
         build_web.build_web()
+
     assert (web / "keep.txt").is_file()
 
 
@@ -167,13 +174,3 @@ def test_cleanup_rejects_symlink_to_external_files(monkeypatch, tmp_path):
     with pytest.raises(RuntimeError):
         build_web._clear_build_directory(stage)
     assert (outside / "keep.txt").is_file()
-
-
-@pytest.mark.parametrize("apk_names", (("first.apk", "second.apk"), ()))
-def test_generated_bundle_requires_exactly_one_apk(tmp_path, apk_names):
-    (tmp_path / "index.html").write_text("<html></html>")
-    for name in apk_names:
-        (tmp_path / name).write_bytes(b"apk")
-    (tmp_path / "directory.apk").mkdir()
-    with pytest.raises(RuntimeError, match="APK"):
-        build_web._validate_pygbag_output(tmp_path)

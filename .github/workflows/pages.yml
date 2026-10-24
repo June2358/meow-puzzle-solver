@@ -20,7 +20,7 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   build:
-    name: Build Pygbag site
+    name: Build PyScript site
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -35,11 +35,8 @@ jobs:
       - name: Install Python
         run: uv python install
 
-      - name: Sync Web build environment
-        run: uv sync --locked --no-dev --group web
-
       - name: Build Web site
-        run: uv run --no-sync python scripts/build_web.py
+        run: uv run --no-project python scripts/build_web.py
 
       - name: Configure GitHub Pages
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

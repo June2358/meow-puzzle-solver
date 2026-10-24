@@ -1,8 +1,6 @@
-"""The single desktop and Pygbag entry point."""
+"""The desktop entry point."""
 
 import asyncio
-
-import pygame  # noqa: F401  # Pygbag discovers its WebAssembly preload here.
 
 from puzzle_common.app import run_app
 

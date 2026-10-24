@@ -1,10 +1,8 @@
-"""Build one Pygbag application and redirects for previous puzzle URLs."""
+"""Build the production PyScript site with one shared application bundle."""
 
-import os
 import shutil
-import subprocess
-import sys
 from pathlib import Path
+from zipfile import ZIP_DEFLATED, ZipFile
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BUILD_ROOT = PROJECT_ROOT / "build"
@@ -40,7 +38,9 @@ def stage_runtime_files() -> Path:
     stage_root = _stage_root()
     entry_point = PROJECT_ROOT / "main.py"
     if not entry_point.is_file():
-        raise FileNotFoundError(f"Pygbag 진입점을 찾을 수 없습니다: {entry_point}")
+        raise FileNotFoundError(
+            f"애플리케이션 진입점을 찾을 수 없습니다: {entry_point}"
+        )
     for name in RUNTIME_PACKAGES:
         package = PROJECT_ROOT / name
         if not package.is_dir():
@@ -59,54 +59,45 @@ def stage_runtime_files() -> Path:
     return stage_root
 
 
-def pygbag_command() -> list[str]:
-    """Return the pinned build command for the single application."""
-    return [
-        sys.executable,
-        "-m",
-        "pygbag",
-        "--no_opt",
-        "--ume_block",
-        "0",
-        "--can_close",
-        "1",
-        "--PYBUILD",
-        "3.12",
-        "--width",
-        "1010",
-        "--height",
-        "700",
-        "--app_name",
-        APP_NAME,
-        "--package",
-        "io.github.june2358.puzzle_solvers",
-        "--title",
-        "Puzzle Solvers",
-        "--build",
-        str(_stage_root()),
-    ]
-
-
-def _validate_pygbag_output(output: Path) -> None:
-    """Reject incomplete output before it can become a Pages artifact."""
-    if not (output / "index.html").is_file():
-        raise RuntimeError("Pygbag Web 산출물에 index.html이 없습니다.")
-    if sum(path.is_file() for path in output.glob("*.apk")) != 1:
-        raise RuntimeError(
-            "Pygbag Web 산출물에는 애플리케이션 APK가 하나 있어야 합니다."
-        )
-
-
 def build_web() -> None:
-    """Validate the complete single bundle before replacing the deployable site."""
-    environment = os.environ.copy()
-    environment.setdefault("PYTHONUTF8", "1")
+    """Package the validated runtime once for the root PyScript site."""
     stage_root = stage_runtime_files()
-    subprocess.run(pygbag_command(), cwd=PROJECT_ROOT, env=environment, check=True)
-    output = stage_root / "build/web"
-    _validate_pygbag_output(output)
     _clear_build_directory(WEB_OUTPUT)
-    shutil.copytree(output, WEB_OUTPUT)
+    WEB_OUTPUT.mkdir(parents=True)
+    with ZipFile(WEB_OUTPUT / "runtime.zip", "w", ZIP_DEFLATED) as archive:
+        for path in sorted(stage_root.rglob("*")):
+            if path.is_file():
+                archive.write(path, path.relative_to(stage_root).as_posix())
+    (WEB_OUTPUT / "pyscript.toml").write_text(
+        '[files]\n"./runtime.zip" = "./*"\n', encoding="utf-8"
+    )
+    (WEB_OUTPUT / "index.html").write_text(
+        """<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Puzzle Solvers · PyScript</title>
+  <link rel="stylesheet" href="https://pyscript.net/releases/2026.7.3/core.css">
+  <script type="module" src="https://pyscript.net/releases/2026.7.3/core.js"></script>
+  <style>
+    body { margin: 0; min-height: 100dvh; background: #14161c;
+           display: grid; place-items: center; }
+    canvas { display: block; max-width: 100%; height: auto; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas" aria-label="퍼즐 솔버"></canvas>
+  <script type="py-game" config="pyscript.toml">
+from puzzle_common.app import run_app
+
+await run_app()
+  </script>
+</body>
+</html>
+""",
+        encoding="utf-8",
+    )
     for key in ("meow", "sudoku"):
         redirect = WEB_OUTPUT / key
         redirect.mkdir()
@@ -117,7 +108,16 @@ def build_web() -> None:
             f'<title>퍼즐 솔버</title>\n<a href="{target}">퍼즐 열기</a>\n</html>\n',
             encoding="utf-8",
         )
-    print(f"Web build ready: {WEB_OUTPUT}")
+    legacy = WEB_OUTPUT / "pyscript"
+    legacy.mkdir()
+    (legacy / "index.html").write_text(
+        '<!doctype html>\n<html lang="ko">\n<meta charset="utf-8">\n'
+        "<title>퍼즐 솔버</title>\n"
+        '<script>location.replace("../" + location.search)</script>\n'
+        '<a href="../">퍼즐 열기</a>\n</html>\n',
+        encoding="utf-8",
+    )
+    print(f"PyScript site ready: {WEB_OUTPUT}")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,4 @@
 import json
-from html import unescape
 from types import SimpleNamespace
 
 import pygame
@@ -12,7 +11,7 @@ from sudoku.definition import DEFINITION as SUDOKU
 
 
 class FakeElement:
-    def __init__(self, document: "FakeDocument", tag_name: str) -> None:
+    def __init__(self, document: FakeDocument, tag_name: str) -> None:
         self.document = document
         self.tagName = tag_name.upper()
         self.id = ""
@@ -22,25 +21,14 @@ class FakeElement:
         self.style = SimpleNamespace(cssText="")
         self.attributes: dict[str, str] = {}
         self.textContent = ""
-        self._innerHTML = ""
+        self.innerHTML = ""
         self.value = ""
         self.hidden = False
         self.removed = False
         self.focus_calls = 0
         self.select_calls = 0
 
-    @property
-    def innerHTML(self) -> str:
-        return self._innerHTML
-
-    @innerHTML.setter
-    def innerHTML(self, value: str) -> None:
-        self._innerHTML = value
-        self.textContent = unescape(value)
-        if self.tagName == "TEXTAREA":
-            self.value = self.textContent
-
-    def appendChild(self, child: "FakeElement") -> None:
+    def appendChild(self, child: FakeElement) -> None:
         child.parent = self
         self.children.append(child)
 
@@ -201,8 +189,7 @@ def test_prompt_dialog_is_read_only_selected_and_cancel_removes_it(
     assert overlay is not None
     assert textarea is not None
     assert textarea.value == prompt
-    assert textarea.innerHTML.isascii()
-    assert unescape(textarea.innerHTML) == prompt
+    assert textarea.innerHTML == ""
     assert "readonly" in textarea.attributes
     assert textarea.focus_calls == 1
     assert textarea.select_calls == 1
@@ -226,11 +213,28 @@ def test_web_runtime_detection_is_strictly_emscripten(
     assert web_text_dialog.is_web_runtime()
 
 
-def test_dom_ui_text_is_ascii_only_and_html_safe(document: FakeDocument) -> None:
+def test_missing_dom_element_can_be_a_falsey_jsnull(document, monkeypatch):
+    class JsNull:
+        def __bool__(self):
+            return False
+
+    lookup = document.getElementById
+    monkeypatch.setattr(document, "getElementById", lambda key: lookup(key) or JsNull())
+    dialog = web_text_dialog.WebTextDialog(
+        title="JSON 입력", description="", text="[]", editable=True
+    )
+    assert document.getElementById(web_text_dialog._TEXTAREA_ID).value == "[]"
+    dialog.close()
+    assert document.canvas.focus_calls == 1
+
+
+def test_dom_ui_text_preserves_unicode_without_html_parsing(
+    document: FakeDocument,
+) -> None:
     dialog = web_text_dialog.WebTextDialog(
         title="한글 제목 <>&",
         description="설명 <태그> & 안전",
-        text="",
+        text="한글 </textarea><script>alert('text')</script> & 값",
         editable=True,
     )
     heading = next(node for node in document.body.descendants() if node.tagName == "H2")
@@ -241,20 +245,23 @@ def test_dom_ui_text_is_ascii_only_and_html_safe(document: FakeDocument) -> None
     )
     error = document.getElementById(web_text_dialog._ERROR_ID)
     cancel = _find_by_text(document, "취소")
+    submit = _find_by_text(document, "불러오기")
+    textarea = document.getElementById(web_text_dialog._TEXTAREA_ID)
 
     assert error is not None
     assert cancel is not None
-    assert heading.innerHTML.isascii()
-    assert help_text.innerHTML.isascii()
-    assert cancel.innerHTML.isascii()
+    assert submit is not None
+    assert textarea is not None
     assert heading.textContent == "한글 제목 <>&"
     assert help_text.textContent == "설명 <태그> & 안전"
-    assert "&lt;&gt;&amp;" in heading.innerHTML
-    assert "<태그>" not in help_text.innerHTML
+    assert textarea.value == "한글 </textarea><script>alert('text')</script> & 값"
+    assert heading.innerHTML == ""
+    assert help_text.innerHTML == ""
+    assert cancel.innerHTML == ""
+    assert submit.innerHTML == ""
+    assert textarea.innerHTML == ""
 
     dialog.show_error("오류 <script> & 값")
 
-    assert error.innerHTML.isascii()
     assert error.textContent == "오류 <script> & 값"
-    assert "<script>" not in error.innerHTML
-    assert "&lt;script&gt; &amp;" in error.innerHTML
+    assert error.innerHTML == ""

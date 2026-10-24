@@ -3,7 +3,7 @@ from sample_puzzles import UNIQUE_SOLUTION, grid_from_string
 from puzzle_common.engine import LogicStatus, Outcome
 from puzzle_common.presentation import FrameKind, build_frames
 from sudoku.board import Puzzle
-from sudoku.solver import SudokuSolver
+from sudoku.solver import solve as solve_sudoku
 
 REFUTATION_THEN_SOLUTION = (
     "800400057250000640097300800000070406000905000904060000008001720019000085530007004"
@@ -11,7 +11,7 @@ REFUTATION_THEN_SOLUTION = (
 
 
 def test_refutation_removes_the_proven_candidate() -> None:
-    result = SudokuSolver(Puzzle(grid_from_string(REFUTATION_THEN_SOLUTION))).solve()
+    result = solve_sudoku(Puzzle(grid_from_string(REFUTATION_THEN_SOLUTION)))
     frames = build_frames(result)
     refutation = next(frame for frame in frames if frame.kind is FrameKind.REFUTATION)
     contradictions = tuple(
@@ -36,7 +36,7 @@ def test_assumption_solution_is_still_checked_for_a_second_solution() -> None:
     for row, col in ((0, 3), (0, 4), (3, 3), (3, 4)):
         grid[row][col] = 0
 
-    result = SudokuSolver(Puzzle(grid)).solve()
+    result = solve_sudoku(Puzzle(grid))
     frames = build_frames(result)
     kinds = [frame.kind for frame in frames]
     branch_solution = next(

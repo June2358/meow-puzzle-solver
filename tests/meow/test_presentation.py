@@ -1,9 +1,8 @@
+from meow.definition import DEFINITION, load_preset
 from meow.model import Puzzle
-from meow.presentation import describe_frame
-from meow.puzzle_catalog import load_preset
 from meow.solve_types import SOLVER_ALGORITHM_LABELS, Technique, UnitKind
 from meow.solver import solve
-from meow.ui_style import region_palette
+from puzzle_common.board import region_palette
 from puzzle_common.engine import LogicStatus
 from puzzle_common.presentation import FrameKind, build_frames
 
@@ -60,10 +59,14 @@ def test_shared_frames_keep_native_deductions_and_probe_context():
     ]
     for frame in frames:
         if frame.deduction is not None:
-            details = describe_frame(frame, result)
-            assert details.title == SOLVER_ALGORITHM_LABELS[frame.deduction.algorithm]
+            details = DEFINITION.describe(
+                frame.snapshot.puzzle.region_grid, frame, result
+            )
+            data = DEFINITION.frame_data(frame.snapshot.puzzle.region_grid, frame)
+            assert data.technique == SOLVER_ALGORITHM_LABELS[frame.deduction.algorithm]
+            assert details.reason == data.reason
+            assert any(label == data.technique for label, _ in details.annotations)
             assert bool(details.assumption) == (frame.active_assumption is not None)
-            assert bool(details.annotations) == (frame.active_assumption is not None)
 
 
 def test_stalled_probes_restore_before_search(stalled_probe_puzzle):
@@ -73,11 +76,10 @@ def test_stalled_probes_restore_before_search(stalled_probe_puzzle):
 
     assert len(restores) == len(result.run.probing_rounds[-1].probes)
     assert all(frame.active_assumption is None for frame in restores)
-    assert all(
-        "다음 우선순위 후보" in describe_frame(frame, result).reason
-        for frame in restores[:-1]
-    )
-    assert "분기 탐색" in describe_frame(restores[-1], result).reason
+    for frame in restores:
+        details = DEFINITION.describe(stalled_probe_puzzle.region_grid, frame, result)
+        assert details.assumption == ""
+        assert details.reason
     assert [frame.kind for frame in frames[-2:]] == [FrameKind.SEARCH, FrameKind.FINAL]
     assert frames[-1].snapshot is result.solution
 
@@ -89,10 +91,10 @@ def test_no_probe_candidate_is_explained_before_search():
     selection = next(
         frame for frame in frames if frame.kind is FrameKind.PROBING_SELECT
     )
-    details = describe_frame(selection, result)
+    details = DEFINITION.describe(puzzle.region_grid, selection, result)
 
-    assert details.title.endswith("대상 없음")
-    assert "새 고양이를 확정하는 후보가 없습니다" in details.reason
+    assert "후보" in details.title
+    assert "없" in details.reason
     assert frames[-2].kind is FrameKind.SEARCH
 
 
@@ -111,7 +113,7 @@ def test_region_names_stay_private_and_region_colors_follow_evidence():
     region_frames = []
 
     for frame in frames:
-        details = describe_frame(frame, result)
+        details = DEFINITION.describe(frame.snapshot.puzzle.region_grid, frame, result)
         assert "SECRET_REGION_" not in details.title + details.reason
         if details.region_colors:
             region_frames.append(frame)

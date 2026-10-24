@@ -3,9 +3,9 @@ import pytest
 from puzzle_common.engine import LogicStatus, Outcome
 from puzzle_common.presentation import FrameKind, build_frames
 from sudoku.board import Puzzle
-from sudoku.puzzle_catalog import load_puzzle_catalog
+from sudoku.definition import load_puzzle_catalog
 from sudoku.solve_types import Technique
-from sudoku.solver import SudokuSolver
+from sudoku.solver import solve as solve_sudoku
 
 EXPECTED_DIFFICULTIES = (
     "쉬움",
@@ -41,7 +41,7 @@ def test_builtin_puzzle_keeps_its_advertised_trace_role(
 ) -> None:
     puzzle = Puzzle(load_puzzle_catalog()[difficulty])
 
-    result = SudokuSolver(puzzle).solve()
+    result = solve_sudoku(puzzle)
     assert result.outcome is Outcome.UNIQUE
     assert result.solution is not None
 

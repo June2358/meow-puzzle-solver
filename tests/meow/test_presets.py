@@ -1,4 +1,4 @@
-from meow.puzzle_catalog import PRESET_NAMES, load_preset
+from meow.definition import PRESET_NAMES, load_preset
 from meow.solver import solve
 from puzzle_common.engine import LogicStatus, Outcome
 

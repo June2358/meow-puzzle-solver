@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from itertools import combinations
 
+from meow.definition import load_preset
 from meow.engine_adapter import _rank_probe_candidates
-from meow.logic_solver import solve_logically
 from meow.model import Puzzle
-from meow.puzzle_catalog import load_preset
 from meow.solve_types import Technique
-from meow.solver import solve
+from meow.solver import solve, solve_logically
 from meow.state import LogicSnapshot, LogicState
 from puzzle_common.engine import LogicStatus, Outcome
 

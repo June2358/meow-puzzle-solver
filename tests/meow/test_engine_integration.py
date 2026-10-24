@@ -1,6 +1,5 @@
-from meow.logic_solver import solve_logically
-from meow.puzzle_catalog import load_preset
-from meow.solver import solve
+from meow.definition import load_preset
+from meow.solver import solve, solve_logically
 from meow.state import LogicState
 from puzzle_common.engine import LogicStatus
 

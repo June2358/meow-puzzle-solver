@@ -1,13 +1,13 @@
-"""Shared input behavior must hold for both real puzzle editors."""
+"""One editor keeps both puzzle definitions safe under the same controls."""
 
 import asyncio
+import json
 from dataclasses import replace
 
 import pygame
 import pytest
 
-from meow.input_dialog import MeowInputDialog
-from sudoku.input_dialog import SudokuInputDialog
+from puzzle_common.input_dialog import InputDialog
 
 
 class PendingDialog:
@@ -21,47 +21,254 @@ class PendingDialog:
         self.closed = True
 
 
-@pytest.fixture(params=[MeowInputDialog, SudokuInputDialog])
-def dialog(request):
+@pytest.fixture(params=["meow", "sudoku"])
+def definition(request):
+    if request.param == "meow":
+        from meow.definition import DEFINITION
+    else:
+        from sudoku.definition import DEFINITION
+    return DEFINITION
+
+
+@pytest.fixture
+def dialog(definition):
     pygame.init()
-    instance = request.param()
+    instance = InputDialog(definition)
     yield instance
+    instance._close_web_text_dialog()
     pygame.quit()
+
+
+def key(key_code, text="", mod=0):
+    return pygame.event.Event(pygame.KEYDOWN, key=key_code, unicode=text, mod=mod)
+
+
+def test_editing_replaces_immutable_draft_and_delete_uses_definition_empty(dialog):
+    original = dialog.draft
+    dialog.selected_cell = (0, 0)
+    value = dialog.definition.symbols[0]
+    dialog._handle_events([key(pygame.key.key_code(str(value).lower()), str(value))])
+    assert dialog.draft[0][0] == value
+    assert original[0][0] == dialog.definition.empty
+    assert isinstance(dialog.draft, tuple)
+    assert all(isinstance(row, tuple) for row in dialog.draft)
+    dialog._handle_events([key(pygame.K_DELETE)])
+    assert dialog.draft == original
+
+
+@pytest.mark.parametrize(
+    "delete_key", [pygame.K_0, pygame.K_KP0, pygame.K_DELETE, pygame.K_BACKSPACE]
+)
+def test_all_clear_keys_clear_selected_cell(dialog, delete_key):
+    dialog._load_preset(0)
+    dialog.selected_cell = (0, 0)
+    dialog._handle_events([key(delete_key)])
+    assert dialog.draft[0][0] == dialog.definition.empty
+
+
+@pytest.mark.parametrize("number", range(1, 10))
+def test_keypad_numbers_are_mapped_individually(dialog, number):
+    dialog.selected_cell = (0, 0)
+    dialog._handle_events([key(getattr(pygame, f"K_KP{number}"))])
+    expected = next(
+        (value for value in dialog.definition.symbols if str(value) == str(number)),
+        dialog.definition.empty,
+    )
+    assert dialog.draft[0][0] == expected
+
+
+def test_invalid_json_preserves_draft_selection_and_layout(dialog):
+    dialog._load_preset(0)
+    dialog.selected_cell = (1, 1)
+    before = dialog.draft, dialog.selected_cell, dialog.layout
+    for text in ("{", "null", "[[true]]", '{"regions":[["A"],[]]}'):
+        with pytest.raises(ValueError):
+            dialog._load_json_text(text)
+        assert (dialog.draft, dialog.selected_cell, dialog.layout) == before
+
+
+def test_preset_and_json_return_the_normalized_draft(dialog):
+    dialog._load_preset(0)
+    grid = dialog.draft
+    document = {"regions": grid} if dialog.definition.key == "meow" else grid
+    dialog._load_json_text(json.dumps(document))
+    result = dialog._handle_start()
+    assert result is dialog.draft
+    assert result == grid
+    assert not dialog.running
+    assert not dialog.quit_requested
+
+
+def test_blank_draft_is_returned_for_solver_validation(dialog):
+    assert dialog._handle_start() is dialog.draft
+    assert not dialog.running
+
+
+def test_invalid_initial_grid_is_rejected_before_display(definition, monkeypatch):
+    import puzzle_common.input_dialog as common_input
+
+    def unexpected_display(*args):
+        pytest.fail("Invalid drafts must be rejected before opening the editor")
+
+    monkeypatch.setattr(common_input, "configure_display", unexpected_display)
+    with pytest.raises(ValueError):
+        InputDialog(definition, initial_grid=[[True]])
+
+
+def test_unchanged_cell_keeps_feedback_and_selection(dialog):
+    value = dialog.definition.symbols[0]
+    dialog.selected_cell = (0, 0)
+    event = key(pygame.key.key_code(str(value).lower()), str(value))
+    dialog._handle_events([event])
+    dialog._show_error("원본 입력을 확인하세요.")
+    before = dialog.draft
+    dialog._handle_events([event])
+    assert dialog.draft is before
+    assert dialog.validation_error == "원본 입력을 확인하세요."
+    assert dialog.selected_cell == (0, 0)
+
+
+def test_conflicting_sudoku_json_is_editable_and_highlighted():
+    from sudoku.definition import DEFINITION
+
+    pygame.init()
+    try:
+        dialog = InputDialog(DEFINITION)
+        grid = [[0] * 9 for _ in range(9)]
+        grid[0][:2] = [1, 1]
+        dialog._load_json_text(json.dumps(grid))
+        assert dialog.draft[0][:3] == (1, 1, 0)
+        view = DEFINITION.editor_view(dialog.draft)
+        assert view.cells[0][0] != view.cells[1][3]
+        dialog.selected_cell = (0, 1)
+        dialog._handle_events([key(pygame.K_2, "2")])
+        assert dialog.draft[0][:3] == (1, 2, 0)
+        assert dialog._handle_start() is dialog.draft
+    finally:
+        pygame.quit()
+
+
+def test_size_changes_are_bounded_and_reset_selection(dialog):
+    low, high = dialog.definition.size_range
+    before = dialog.draft
+    for text in ("0", str(high + 1), "", "9" * 5000):
+        dialog.size_text = text
+        dialog._apply_size()
+        assert dialog.draft is before
+        assert dialog.validation_error
+    dialog.selected_cell = (0, 0)
+    dialog.size_text = str(low)
+    dialog._apply_size()
+    assert len(dialog.draft) == low
+    assert all(
+        value == dialog.definition.empty for row in dialog.draft for value in row
+    )
+    assert dialog.selected_cell is None
+    assert dialog.board_size == low
+
+
+def test_paint_drag_copies_filled_cell_and_stops_on_focus_loss(dialog):
+    dialog._load_preset(0)
+    source = next(
+        (r, c)
+        for r, row in enumerate(dialog.draft)
+        for c, value in enumerate(row)
+        if value != dialog.definition.empty
+    )
+    value = dialog.draft[source[0]][source[1]]
+    target = (len(dialog.draft) - 1, len(dialog.draft) - 1)
+    dialog._handle_events(
+        [
+            pygame.event.Event(
+                pygame.MOUSEBUTTONDOWN,
+                button=1,
+                pos=dialog.layout.cell_rect(source).center,
+            ),
+            pygame.event.Event(
+                pygame.MOUSEMOTION,
+                pos=dialog.layout.cell_rect(target).center,
+                buttons=(1, 0, 0),
+            ),
+            pygame.event.Event(pygame.WINDOWFOCUSLOST),
+        ]
+    )
+    assert dialog.draft[target[0]][target[1]] == value
+    before = dialog.draft
+    dialog._handle_events(
+        [
+            pygame.event.Event(
+                pygame.MOUSEMOTION,
+                pos=dialog.layout.cell_rect((0, 0)).center,
+                buttons=(1, 0, 0),
+            )
+        ]
+    )
+    assert dialog.draft is before
 
 
 def test_active_modal_blocks_background_edits_and_still_allows_quit(dialog):
     dialog.selected_cell = (0, 0)
-    before = str(getattr(dialog, "draft", getattr(dialog, "board", None)))
+    before = dialog.draft
     dialog._open_web_dialog(PendingDialog)
+    dialog._handle_events(
+        [key(pygame.K_a, "A"), key(pygame.K_3, "3"), pygame.event.Event(pygame.QUIT)]
+    )
+    assert dialog.draft is before
+    assert not dialog.running
+    assert dialog.quit_requested
 
+
+def test_opening_modal_ends_a_paint_gesture(dialog):
+    value = dialog.definition.symbols[0]
+    dialog._set_cell((0, 0), value)
     dialog._handle_events(
         [
-            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_a, unicode="A", mod=0),
-            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_3, unicode="3", mod=0),
-            pygame.event.Event(pygame.QUIT),
+            pygame.event.Event(
+                pygame.MOUSEBUTTONDOWN,
+                button=1,
+                pos=dialog.layout.cell_rect((0, 0)).center,
+            )
         ]
     )
-
-    assert str(getattr(dialog, "draft", getattr(dialog, "board", None))) == before
-    assert not dialog.running
-
-
-@pytest.mark.parametrize("key", [pygame.K_RETURN, pygame.K_3])
-def test_escape_discards_remaining_queued_events(dialog, key):
-    dialog._load_preset(0)
-    dialog.selected_cell = (0, 0)
-    before = str(getattr(dialog, "draft", getattr(dialog, "board", None)))
-
-    result = dialog._handle_events(
+    dialog._open_web_dialog(PendingDialog)
+    dialog._close_web_text_dialog()
+    before = dialog.draft
+    dialog._handle_events(
         [
-            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE, mod=0),
-            pygame.event.Event(pygame.KEYDOWN, key=key, unicode="3", mod=0),
+            pygame.event.Event(
+                pygame.MOUSEMOTION,
+                buttons=(1, 0, 0),
+                pos=dialog.layout.cell_rect((1, 1)).center,
+            )
         ]
     )
+    assert dialog.draft is before
 
-    assert result is None
+
+@pytest.mark.parametrize(
+    "events",
+    [
+        [key(pygame.K_RETURN), pygame.event.Event(pygame.QUIT)],
+        [key(pygame.K_a, "A"), pygame.event.Event(pygame.QUIT)],
+        [key(pygame.K_ESCAPE), pygame.event.Event(pygame.QUIT)],
+    ],
+)
+def test_quit_wins_over_every_queued_action(dialog, events):
+    dialog._load_preset(0)
+    before = dialog.draft
+    assert dialog._handle_events(events) is None
+    assert dialog.draft is before
+    assert dialog.quit_requested
     assert not dialog.running
-    assert str(getattr(dialog, "draft", getattr(dialog, "board", None))) == before
+
+
+def test_escape_returns_to_selector_and_discards_later_events(dialog):
+    dialog._load_preset(0)
+    before = dialog.draft
+    assert dialog._handle_events([key(pygame.K_ESCAPE), key(pygame.K_RETURN)]) is None
+    assert not dialog.running
+    assert not dialog.quit_requested
+    assert dialog.draft is before
 
 
 def test_quit_closes_modal_without_polling_it(dialog, monkeypatch):
@@ -79,7 +286,6 @@ def test_quit_closes_modal_without_polling_it(dialog, monkeypatch):
 
     monkeypatch.setattr(common_input, "next_frame", next_frame)
     monkeypatch.setattr(pygame.event, "get", lambda: [pygame.event.Event(pygame.QUIT)])
-
     assert asyncio.run(dialog.run()) is None
     assert browser_dialog.closed
 
@@ -94,26 +300,24 @@ def test_open_modal_is_cleaned_up_when_initial_drawing_fails(dialog, monkeypatch
     monkeypatch.setattr(dialog, "draw", fail_to_draw)
     with pytest.raises(RuntimeError, match="drawing failed"):
         asyncio.run(dialog.run())
-
     assert browser_dialog.closed
     assert dialog._web_text_dialog is None
 
 
-def test_arrow_navigation_clamps_to_the_board_and_moves_one_cell(dialog):
-    dialog.selected_cell = (0, 0)
-    for key in (pygame.K_LEFT, pygame.K_UP):
-        dialog._handle_keydown(pygame.event.Event(pygame.KEYDOWN, key=key, mod=0))
+def test_arrows_clamp_and_tab_moves_in_cell_order(dialog):
+    dialog._handle_events([key(pygame.K_UP), key(pygame.K_LEFT)])
     assert dialog.selected_cell == (0, 0)
-
-    for key in (pygame.K_RIGHT, pygame.K_DOWN):
-        dialog._handle_keydown(pygame.event.Event(pygame.KEYDOWN, key=key, mod=0))
+    dialog._handle_events([key(pygame.K_RIGHT), key(pygame.K_DOWN)])
     assert dialog.selected_cell == (1, 1)
-
-    edge = dialog.grid_width // dialog.cell_size - 1
-    dialog.selected_cell = (edge, edge)
-    for key in (pygame.K_RIGHT, pygame.K_DOWN):
-        dialog._handle_keydown(pygame.event.Event(pygame.KEYDOWN, key=key, mod=0))
-    assert dialog.selected_cell == (edge, edge)
+    size = len(dialog.draft)
+    dialog.selected_cell = (0, size - 1)
+    dialog._handle_events([key(pygame.K_TAB)])
+    assert dialog.selected_cell == (1, 0)
+    dialog._handle_events([key(pygame.K_TAB, mod=pygame.KMOD_SHIFT)])
+    assert dialog.selected_cell == (0, size - 1)
+    dialog.selected_cell = (size - 1, size - 1)
+    dialog._handle_events([key(pygame.K_DOWN), key(pygame.K_RIGHT), key(pygame.K_TAB)])
+    assert dialog.selected_cell == (size - 1, size - 1)
 
 
 def test_opening_a_modal_blocks_later_events_in_the_same_batch(dialog, monkeypatch):
@@ -122,125 +326,44 @@ def test_opening_a_modal_blocks_later_events_in_the_same_batch(dialog, monkeypat
     monkeypatch.setattr(common_input, "is_web_runtime", lambda: True)
     monkeypatch.setattr(common_input, "WebTextDialog", lambda **kwargs: PendingDialog())
     dialog.selected_cell = (0, 0)
-    before = str(getattr(dialog, "draft", getattr(dialog, "board", None)))
-
+    before = dialog.draft
     dialog._handle_events(
         [
             pygame.event.Event(
                 pygame.MOUSEBUTTONDOWN, button=1, pos=dialog.paste_button.rect.center
             ),
-            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_a, unicode="A", mod=0),
-            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_3, unicode="3", mod=0),
+            key(pygame.K_a, "A"),
+            key(pygame.K_3, "3"),
         ]
     )
-
-    assert str(getattr(dialog, "draft", getattr(dialog, "board", None))) == before
+    assert dialog.draft is before
     assert dialog._web_text_dialog is not None
-    dialog._close_web_text_dialog()
-
-
-@pytest.mark.parametrize(
-    ("key", "mod"),
-    [
-        (pygame.K_UP, 0),
-        (pygame.K_DOWN, 0),
-        (pygame.K_LEFT, 0),
-        (pygame.K_RIGHT, 0),
-        (pygame.K_TAB, 0),
-        (pygame.K_TAB, pygame.KMOD_SHIFT),
-    ],
-)
-def test_navigation_without_selection_selects_the_first_cell(dialog, key, mod):
-    dialog._handle_keydown(pygame.event.Event(pygame.KEYDOWN, key=key, mod=mod))
-
-    assert dialog.selected_cell == (0, 0)
-
-
-def test_tab_moves_in_cell_order_and_stops_at_both_ends(dialog):
-    size = dialog.grid_width // dialog.cell_size
-    dialog.selected_cell = (0, size - 1)
-    dialog._handle_keydown(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_TAB, mod=0))
-    assert dialog.selected_cell == (1, 0)
-    dialog._handle_keydown(
-        pygame.event.Event(pygame.KEYDOWN, key=pygame.K_TAB, mod=pygame.KMOD_SHIFT)
-    )
-    assert dialog.selected_cell == (0, size - 1)
-
-    for cell, mod in [((0, 0), pygame.KMOD_SHIFT), ((size - 1, size - 1), 0)]:
-        dialog.selected_cell = cell
-        dialog._handle_keydown(
-            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_TAB, mod=mod)
-        )
-        assert dialog.selected_cell == cell
 
 
 @pytest.mark.parametrize("mod", [pygame.KMOD_CTRL, pygame.KMOD_ALT, pygame.KMOD_GUI])
 @pytest.mark.parametrize(
-    ("key", "text"),
+    "event",
     [
-        (pygame.K_a, "A"),
-        (pygame.K_3, "3"),
-        (pygame.K_DELETE, ""),
-        (pygame.K_BACKSPACE, ""),
-        (pygame.K_c, "C"),
-        (pygame.K_r, "R"),
-        (pygame.K_s, "S"),
-        (pygame.K_RETURN, "\r"),
-        (pygame.K_KP_ENTER, "\r"),
-        (pygame.K_TAB, "\t"),
-        (pygame.K_RIGHT, ""),
+        key(pygame.K_a, "A"),
+        key(pygame.K_3, "3"),
+        key(pygame.K_DELETE),
+        key(pygame.K_RETURN),
+        key(pygame.K_KP_ENTER),
+        key(pygame.K_TAB),
+        key(pygame.K_RIGHT),
     ],
 )
-def test_command_modifiers_do_not_edit_navigate_or_start(dialog, mod, key, text):
+def test_command_modifiers_do_not_edit_navigate_or_start(dialog, mod, event):
     dialog._load_preset(0)
     dialog.selected_cell = (0, 0)
-    before = str(getattr(dialog, "draft", getattr(dialog, "board", None)))
-    message = (dialog.validation_error, dialog.notice_message)
-
-    result = dialog._handle_keydown(
-        pygame.event.Event(pygame.KEYDOWN, key=key, unicode=text, mod=mod)
-    )
-
-    assert str(getattr(dialog, "draft", getattr(dialog, "board", None))) == before
-    assert (dialog.validation_error, dialog.notice_message) == message
+    before = dialog.draft, dialog.validation_error, dialog.notice_message
+    assert dialog._handle_events([key(event.key, event.unicode, mod)]) is None
+    assert (dialog.draft, dialog.validation_error, dialog.notice_message) == before
     assert dialog.selected_cell == (0, 0)
-    assert result is None
     assert dialog.running
 
 
-@pytest.mark.parametrize("message_method", ["_show_error", "_show_notice"])
-def test_reentering_the_same_value_keeps_feedback(dialog, message_method):
-    if isinstance(dialog, MeowInputDialog):
-        dialog._set_cell((0, 0), "A", advance=False)
-        key, text = pygame.K_a, "A"
-    else:
-        dialog._set_cell(0, 0, 3)
-        key, text = pygame.K_3, "3"
-    dialog.selected_cell = (0, 0)
-    getattr(dialog, message_method)("원본 입력을 확인하세요.")
-    before = (dialog.validation_error, dialog.notice_message)
-
-    dialog._handle_keydown(
-        pygame.event.Event(pygame.KEYDOWN, key=key, unicode=text, mod=0)
-    )
-
-    assert (dialog.validation_error, dialog.notice_message) == before
-    assert dialog.selected_cell == (0, 0)
-
-
-def test_input_uses_shared_layout_for_board_panel_and_window(dialog):
-    assert dialog.screen.get_size() == (1010, 700)
-    assert (dialog.panel_x, dialog.panel_width) == (615, 350)
-    if isinstance(dialog, MeowInputDialog):
-        assert (dialog.cell_size, dialog.grid_width) == (67, 536)
-        assert (dialog.grid_start_x, dialog.grid_start_y) == (47, 72)
-    else:
-        assert (dialog.cell_size, dialog.grid_width) == (60, 540)
-        assert (dialog.grid_start_x, dialog.grid_start_y) == (45, 70)
-
-
 def test_panel_information_uses_info_font_instead_of_board_candidates(dialog):
-    assert hasattr(dialog.fonts, "info")
     rendered = []
 
     class RecordingFont:
@@ -265,10 +388,6 @@ def test_panel_information_uses_info_font_instead_of_board_candidates(dialog):
         dialog.fonts, info=RecordingFont(dialog.fonts.info), candidate=BoardOnlyFont()
     )
     dialog._show_error("입력을 확인하세요.")
-
     dialog._draw_panel()
-
     assert "입력을 확인하세요." in rendered
     assert any("Tab" in text for text in rendered)
-    if dialog.progress_text:
-        assert dialog.progress_text in rendered

@@ -2,7 +2,7 @@ from sample_puzzles import UNIQUE_GRID, UNIQUE_SOLUTION
 
 from puzzle_common.engine import Outcome
 from sudoku.board import Puzzle
-from sudoku.solver import SudokuSolver
+from sudoku.solver import solve as solve_sudoku
 from sudoku.topology import UNITS
 
 # No givens conflict, but R3C1 has no candidate because of the changed R1C1.
@@ -44,7 +44,7 @@ def assert_valid_solution(solution, puzzle: Puzzle) -> None:
 def test_unique_puzzle_returns_the_unique_solution() -> None:
     puzzle = Puzzle(UNIQUE_GRID)
 
-    result = SudokuSolver(puzzle).solve()
+    result = solve_sudoku(puzzle)
 
     assert result.outcome is Outcome.UNIQUE
     assert result.solution[0] == UNIQUE_SOLUTION
@@ -54,7 +54,7 @@ def test_unique_puzzle_returns_the_unique_solution() -> None:
 def test_multiple_puzzle_returns_a_valid_representative() -> None:
     puzzle = Puzzle(MULTIPLE_GRID)
 
-    result = SudokuSolver(puzzle).solve()
+    result = solve_sudoku(puzzle)
 
     assert result.outcome is Outcome.MULTIPLE
     assert_valid_solution(result.solution[0], puzzle)
@@ -63,7 +63,7 @@ def test_multiple_puzzle_returns_a_valid_representative() -> None:
 def test_consistent_but_impossible_givens_are_unsolvable() -> None:
     puzzle = Puzzle(UNSOLVABLE_GRID)
 
-    result = SudokuSolver(puzzle).solve()
+    result = solve_sudoku(puzzle)
 
     assert result.outcome is Outcome.UNSOLVABLE
     assert result.solution is None

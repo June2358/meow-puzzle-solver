@@ -5,10 +5,12 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
+from typing import Literal, overload
 
 type Cell = tuple[int, int]
 type Unit = tuple[Cell, ...]
 type RegionGrid = tuple[tuple[str, ...], ...]
+type DraftGrid = tuple[tuple[str | None, ...], ...]
 MAX_PUZZLE_SIZE = 26
 
 
@@ -33,18 +35,31 @@ def _normalize_region_label(label: object, row: int, column: int) -> str:
     return label
 
 
-def _normalize_region_grid(value: object) -> RegionGrid:
+@overload
+def _normalize_region_grid(
+    value: object, *, allow_empty: Literal[False] = False
+) -> RegionGrid: ...
+
+
+@overload
+def _normalize_region_grid(
+    value: object, *, allow_empty: Literal[True]
+) -> DraftGrid: ...
+
+
+def _normalize_region_grid(value: object, *, allow_empty: bool = False) -> DraftGrid:
+    subject = "draft는" if allow_empty else "영역 맵은"
     if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
-        raise InvalidRegionMapError("영역 맵은 행으로 이루어진 시퀀스여야 합니다.")
+        raise InvalidRegionMapError(f"{subject} 행으로 이루어진 시퀀스여야 합니다.")
     if not value:
-        raise InvalidRegionMapError("영역 맵은 비어 있을 수 없습니다.")
+        raise InvalidRegionMapError(f"{subject} 비어 있을 수 없습니다.")
 
     size = len(value)
     if size > MAX_PUZZLE_SIZE:
         raise InvalidRegionMapError(
-            f"영역 맵은 최대 {MAX_PUZZLE_SIZE}×{MAX_PUZZLE_SIZE}까지 지원합니다."
+            f"{subject} 최대 {MAX_PUZZLE_SIZE}×{MAX_PUZZLE_SIZE}까지 지원합니다."
         )
-    rows: list[tuple[str, ...]] = []
+    rows: list[tuple[str | None, ...]] = []
     for row_index, row in enumerate(value):
         if isinstance(row, (str, bytes)) or not isinstance(row, Sequence):
             raise InvalidRegionMapError(
@@ -52,16 +67,39 @@ def _normalize_region_grid(value: object) -> RegionGrid:
             )
         if len(row) != size:
             raise InvalidRegionMapError(
-                f"영역 맵은 {size}×{size} 정사각형이어야 합니다: "
+                f"{subject} {size}×{size} 정사각형이어야 합니다: "
                 f"{row_index + 1}행은 {len(row)}칸"
             )
 
-        normalized_row: list[str] = []
+        normalized_row: list[str | None] = []
         for col_index, label in enumerate(row):
-            normalized_row.append(_normalize_region_label(label, row_index, col_index))
+            normalized_row.append(
+                None
+                if allow_empty and label is None
+                else _normalize_region_label(label, row_index, col_index)
+            )
         rows.append(tuple(normalized_row))
 
     return tuple(rows)
+
+
+def normalize_draft(grid: object) -> DraftGrid:
+    """Validate a region-grid draft while retaining empty cells."""
+
+    return _normalize_region_grid(grid, allow_empty=True)
+
+
+def create_puzzle(grid: object) -> Puzzle:
+    """Construct a puzzle, reporting the first unfilled draft coordinate."""
+
+    normalized = normalize_draft(grid)
+    for row_index, row in enumerate(normalized):
+        for column_index, label in enumerate(row):
+            if label is None:
+                raise InvalidRegionMapError(
+                    f"R{row_index + 1}C{column_index + 1}의 영역 라벨을 입력하세요."
+                )
+    return Puzzle(normalized)
 
 
 def _ordered_labels(grid: RegionGrid) -> tuple[str, ...]:

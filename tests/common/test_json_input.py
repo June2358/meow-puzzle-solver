@@ -1,7 +1,7 @@
 import pytest
 
-from meow.parser import PuzzleParseError, parse_puzzle_json
-from sudoku.matrix_parser import MatrixParseError, parse_matrix_json
+from meow.definition import PuzzleParseError, parse_puzzle_json
+from sudoku.definition import MatrixParseError, parse_matrix_json
 
 
 @pytest.mark.parametrize(

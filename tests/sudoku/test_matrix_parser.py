@@ -4,7 +4,7 @@ import pytest
 from sample_puzzles import UNIQUE_GRID
 
 from sudoku.board import InvalidPuzzleError, Puzzle
-from sudoku.matrix_parser import MatrixParseError, parse_matrix_json
+from sudoku.definition import MatrixParseError, parse_matrix_json
 
 
 def test_parse_matrix_json_accepts_a_valid_grid() -> None:

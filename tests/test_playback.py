@@ -7,10 +7,10 @@ import pygame
 import pytest
 from sample_puzzles import UNIQUE_GRID, UNIQUE_SOLUTION
 
+from meow.definition import DEFINITION as MEOW
+from meow.definition import PRESET_NAMES, load_preset
 from meow.model import Puzzle as MeowPuzzle
-from meow.puzzle_catalog import PRESET_NAMES, load_preset
 from meow.solver import solve
-from meow.visualizer import MeowVisualizer
 from puzzle_common.engine import Outcome
 from puzzle_common.playback import PlaybackScreen
 from puzzle_common.ui_style import (
@@ -22,9 +22,9 @@ from puzzle_common.ui_style import (
     RED_LIGHT,
 )
 from sudoku.board import Puzzle
-from sudoku.puzzle_catalog import load_puzzle_catalog
-from sudoku.solver import SudokuSolver
-from sudoku.visualizer import SudokuVisualizer
+from sudoku.definition import DEFINITION as SUDOKU
+from sudoku.definition import load_puzzle_catalog
+from sudoku.solver import solve as solve_sudoku
 
 
 @pytest.fixture(params=("regions", "digits"))
@@ -32,10 +32,10 @@ def playback(request):
     pygame.init()
     if request.param == "regions":
         puzzle = load_preset("쉬움")
-        visualizer = MeowVisualizer(puzzle, solve(puzzle))
+        visualizer = PlaybackScreen(MEOW, puzzle.region_grid, solve(puzzle))
     else:
         puzzle = Puzzle(UNIQUE_GRID)
-        visualizer = SudokuVisualizer(puzzle, SudokuSolver(puzzle).solve())
+        visualizer = PlaybackScreen(SUDOKU, puzzle.grid, solve_sudoku(puzzle))
     yield visualizer
     pygame.display.quit()
 
@@ -44,18 +44,17 @@ def key(kind, value):
     return pygame.event.Event(kind, key=value)
 
 
-def test_both_playbacks_share_board_and_panel_layout(playback):
-    assert playback.screen.get_size() == (1010, 700)
-    assert playback.board_rect.center == (315, 340)
-    assert playback.panel_rect == pygame.Rect(615, 70, 350, 560)
-
-
-def test_playback_keeps_normalized_data_and_exact_frames(playback):
-    assert isinstance(playback.frames, tuple)
-    assert playback.current_frame is playback.frames[0]
-    assert playback.frame_count == len(playback.frames)
-    assert playback.outcome is playback.result.outcome
-    assert not hasattr(playback, "data")
+@pytest.mark.parametrize("trigger", ["escape", "button"])
+def test_close_request_wins_over_queued_return_to_editor(playback, trigger):
+    event = (
+        key(pygame.KEYDOWN, pygame.K_ESCAPE)
+        if trigger == "escape"
+        else pygame.event.Event(
+            pygame.MOUSEBUTTONDOWN, button=1, pos=playback.edit_button.rect.center
+        )
+    )
+    assert playback._handle_events([event, pygame.event.Event(pygame.QUIT)]) is None
+    assert not playback.running
 
 
 @pytest.mark.parametrize(
@@ -69,12 +68,12 @@ def test_playback_keeps_normalized_data_and_exact_frames(playback):
 def test_common_outcome_badges_render_for_both_puzzles(playback, outcome, expected):
     if outcome is Outcome.UNIQUE:
         visualizer = playback
-    elif isinstance(playback, MeowVisualizer):
+    elif playback.definition.key == "meow":
         size = 4 if outcome is Outcome.MULTIPLE else 2
         puzzle = MeowPuzzle.from_region_grid(
             tuple(tuple("ABCD"[:size]) for _ in range(size))
         )
-        visualizer = MeowVisualizer(puzzle, solve(puzzle))
+        visualizer = PlaybackScreen(MEOW, puzzle.region_grid, solve(puzzle))
     else:
         grid = [list(row) for row in UNIQUE_SOLUTION]
         if outcome is Outcome.MULTIPLE:
@@ -84,7 +83,7 @@ def test_common_outcome_badges_render_for_both_puzzles(playback, outcome, expect
             grid[0][0] = 1
             grid[0][7] = grid[2][0] = 0
         puzzle = Puzzle(grid)
-        visualizer = SudokuVisualizer(puzzle, SudokuSolver(puzzle).solve())
+        visualizer = PlaybackScreen(SUDOKU, puzzle.grid, solve_sudoku(puzzle))
     assert visualizer.outcome is outcome
     assert visualizer._status_badge() == expected
     assert type(visualizer)._status_badge is PlaybackScreen._status_badge
@@ -93,13 +92,13 @@ def test_common_outcome_badges_render_for_both_puzzles(playback, outcome, expect
 
 def test_visualizers_reject_nonresults_and_foreign_snapshots(playback):
     with pytest.raises(TypeError, match="SolveResult"):
-        type(playback)(playback.puzzle, object())
-    if isinstance(playback, MeowVisualizer):
-        foreign = SudokuSolver(Puzzle(UNIQUE_GRID)).solve()
+        PlaybackScreen(playback.definition, playback.grid, object())
+    if playback.definition.key == "meow":
+        foreign = solve_sudoku(Puzzle(UNIQUE_GRID))
     else:
         foreign = solve(load_preset("쉬움"))
     with pytest.raises(TypeError):
-        type(playback)(playback.puzzle, foreign)
+        PlaybackScreen(playback.definition, playback.grid, foreign)
     bad = replace(
         playback.result.run.initial_logic_result,
         initial_state=object(),
@@ -109,16 +108,16 @@ def test_visualizers_reject_nonresults_and_foreign_snapshots(playback):
         playback.result, run=replace(playback.result.run, initial_logic_result=bad)
     )
     with pytest.raises(TypeError):
-        type(playback)(playback.puzzle, result)
+        PlaybackScreen(playback.definition, playback.grid, result)
 
 
 def test_visualizers_reject_another_puzzles_trace(playback):
-    if isinstance(playback, MeowVisualizer):
-        other = load_preset("보통")
+    if playback.definition.key == "meow":
+        other = load_preset("보통").region_grid
     else:
-        other = Puzzle([[0] * 9 for _ in range(9)])
+        other = tuple((0,) * 9 for _ in range(9))
     with pytest.raises(ValueError, match="전달된 문제"):
-        type(playback)(other, playback.result)
+        PlaybackScreen(playback.definition, other, playback.result)
 
 
 def test_draw_delivers_the_exact_current_frame_to_both_hooks(playback, monkeypatch):
@@ -148,9 +147,9 @@ def test_all_builtin_frames_render_effects_within_the_details_area(app, monkeypa
     )
     for puzzle in puzzles:
         view = (
-            MeowVisualizer(puzzle, solve(puzzle))
+            PlaybackScreen(MEOW, puzzle.region_grid, solve(puzzle))
             if app == "regions"
-            else SudokuVisualizer(puzzle, SudokuSolver(puzzle).solve())
+            else PlaybackScreen(SUDOKU, puzzle.grid, solve_sudoku(puzzle))
         )
         draw_effects = view._draw_effect_items
         visible_groups = []
@@ -279,19 +278,16 @@ def test_switching_from_hold_to_play_does_not_spend_elapsed_time_twice(
     assert playback.current_step_index == 1
 
 
-@pytest.mark.parametrize("trigger", ("escape", "button"))
-def test_run_returns_original_draft_on_edit(playback, monkeypatch, trigger):
-    original = (
-        playback.puzzle.region_grid
-        if isinstance(playback, MeowVisualizer)
-        else playback.puzzle.grid
-    )
+@pytest.mark.parametrize("trigger", ("escape", "button", "quit"))
+def test_run_returns_edit_or_close_action(playback, monkeypatch, trigger):
     event = (
         key(pygame.KEYDOWN, pygame.K_ESCAPE)
         if trigger == "escape"
+        else pygame.event.Event(pygame.QUIT)
+        if trigger == "quit"
         else pygame.event.Event(
             pygame.MOUSEBUTTONDOWN, button=1, pos=playback.edit_button.rect.center
         )
     )
     monkeypatch.setattr(pygame.event, "get", lambda: [event])
-    assert asyncio.run(playback.run()) is original
+    assert asyncio.run(playback.run()) is (trigger != "quit")

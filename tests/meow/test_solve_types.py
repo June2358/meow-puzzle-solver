@@ -1,5 +1,5 @@
+from meow.definition import load_preset
 from meow.model import Puzzle
-from meow.puzzle_catalog import load_preset
 from meow.solve_types import (
     SOLVER_ALGORITHM_LABELS,
     TECHNIQUE_ALGORITHMS,

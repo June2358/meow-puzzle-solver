@@ -7,23 +7,16 @@ from .engine_adapter import SudokuDomain
 from .solver_state import SolverState
 
 
-class SudokuSolver:
+def solve(puzzle: Puzzle) -> SolveResult:
     """Explain Sudoku reasoning and distinguish zero, one, or multiple solutions."""
-
-    __slots__ = ("_puzzle",)
-
-    def __init__(self, puzzle: Puzzle):
-        if not isinstance(puzzle, Puzzle):
-            raise TypeError("SudokuSolver는 Puzzle을 받아야 합니다.")
-        self._puzzle = puzzle
-
-    def solve(self) -> SolveResult:
-        run = Engine(SudokuDomain()).solve(SolverState(self._puzzle), solution_limit=2)
-        outcome = (
-            Outcome.MULTIPLE
-            if len(run.solutions) >= 2
-            else Outcome.UNIQUE
-            if run.solutions
-            else Outcome.UNSOLVABLE
-        )
-        return SolveResult(outcome, run)
+    if not isinstance(puzzle, Puzzle):
+        raise TypeError("Sudoku 솔버는 Puzzle을 받아야 합니다.")
+    run = Engine(SudokuDomain()).solve(SolverState(puzzle), solution_limit=2)
+    outcome = (
+        Outcome.MULTIPLE
+        if len(run.solutions) >= 2
+        else Outcome.UNIQUE
+        if run.solutions
+        else Outcome.UNSOLVABLE
+    )
+    return SolveResult(outcome, run)

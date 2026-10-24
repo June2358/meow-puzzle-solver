@@ -1,33 +1,12 @@
 import asyncio
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pygame
 import pytest
 
-from puzzle_common.app import PuzzlePlugin
-from puzzle_common.engine import LogicRun, LogicStatus, Outcome, SolveResult, SolveRun
-
-
-def result_with(outcome):
-    snapshot = object()
-    solvable = outcome is not Outcome.UNSOLVABLE
-    logic = LogicRun(
-        LogicStatus.SOLVED if solvable else LogicStatus.CONTRADICTION,
-        snapshot,
-        snapshot,
-        (),
-        None if solvable else "no solution",
-    )
-    return SolveResult(
-        outcome, SolveRun(logic, (), (snapshot,) if solvable else (), False)
-    )
-
-
-def screen(value):
-    async def run():
-        return value
-
-    return SimpleNamespace(run=run)
+from puzzle_common import app
+from puzzle_common.engine import Outcome
 
 
 @pytest.fixture
@@ -39,94 +18,257 @@ def lifecycle(monkeypatch):
     return calls
 
 
-@pytest.mark.parametrize("outcome", (Outcome.UNIQUE, Outcome.MULTIPLE))
-def test_shared_flow_reopens_editor_with_the_returned_draft(lifecycle, outcome):
-    from puzzle_common.app import run_app
+def editor_sequence(monkeypatch, steps):
+    steps = iter(steps)
+    received = []
 
-    puzzle, draft, edited = object(), object(), object()
-    result = result_with(outcome)
-    inputs = iter((puzzle, None))
-    edits = []
+    class Editor:
+        def __init__(self, definition, initial_grid=None, initial_error=None):
+            received.append((definition.key, initial_grid, initial_error))
+            self.result, self.draft, self.quit_requested = next(steps)
 
-    def editor(previous, error):
-        edits.append((previous, error))
-        return screen(next(inputs))
+        async def run(self):
+            return self.result
 
-    def solver(received):
-        assert received is puzzle
-        return result
-
-    def player(received, solved):
-        assert (received, solved) == (puzzle, result)
-        return screen(edited)
-
-    asyncio.run(run_app(PuzzlePlugin(editor, solver, player, lambda _: draft)))
-
-    assert edits == [(None, None), (edited, None)]
-    assert lifecycle == ["init", "quit"]
+    monkeypatch.setattr(app, "InputDialog", Editor, raising=False)
+    return received
 
 
-def test_shared_flow_keeps_draft_and_error_when_result_cannot_be_shown(lifecycle):
-    from puzzle_common.app import run_app
+def select_sequence(monkeypatch, keys):
+    keys = iter(keys)
 
-    puzzle, draft = object(), object()
-    result = result_with(Outcome.UNSOLVABLE)
-    inputs = iter((puzzle, None))
-    edits = []
+    class Selector:
+        async def run(self):
+            return next(keys)
 
-    def editor(previous, error):
-        edits.append((previous, error))
-        return screen(next(inputs))
+    monkeypatch.setattr(app, "PuzzleSelector", Selector, raising=False)
 
-    def forbidden_player(*args):
-        pytest.fail("Invalid results must return to the editor")
 
-    asyncio.run(
-        run_app(
-            PuzzlePlugin(editor, lambda _: result, forbidden_player, lambda _: draft)
-        )
+def test_switching_puzzles_retains_separate_unsolved_drafts(monkeypatch, lifecycle):
+    first, second = (("A",),), ((4,),)
+    select_sequence(monkeypatch, ("meow", "sudoku", "meow", None))
+    received = editor_sequence(
+        monkeypatch,
+        ((None, first, False), (None, second, False), (None, first, False)),
     )
-
-    assert edits == [
-        (None, None),
-        (draft, "현재 입력으로 가능한 해가 없습니다. 원본 문제와 입력을 확인하세요."),
+    asyncio.run(app.run_app())
+    assert received == [
+        ("meow", None, None),
+        ("sudoku", None, None),
+        ("meow", first, None),
     ]
     assert lifecycle == ["init", "quit"]
 
 
-def test_shared_flow_quits_if_editor_construction_raises(lifecycle):
-    from puzzle_common.app import run_app
+@pytest.mark.parametrize("outcome", (Outcome.UNIQUE, Outcome.MULTIPLE))
+def test_player_returns_to_original_editor_without_reinitializing(
+    monkeypatch, lifecycle, outcome
+):
+    original = (("A",),)
+    result = SimpleNamespace(outcome=outcome)
+    definition = replace(app.DEFINITIONS[0], solve=lambda _: result)
+    monkeypatch.setattr(app, "DEFINITIONS", (definition,))
+    received = editor_sequence(
+        monkeypatch, ((original, original, False), (None, original, True))
+    )
 
-    def failing_editor(*args):
-        raise RuntimeError("editor failed")
+    class Player:
+        def __init__(self, registered, grid, solved):
+            assert (registered, grid, solved) == (definition, original, result)
 
-    with pytest.raises(RuntimeError, match="editor failed"):
-        asyncio.run(
-            run_app(
-                PuzzlePlugin(failing_editor, lambda _: None, screen, lambda _: None)
-            )
-        )
+        async def run(self):
+            return True
 
+    monkeypatch.setattr(app, "PlaybackScreen", Player, raising=False)
+    asyncio.run(app.run_app(initial_key=definition.key))
+    assert received == [(definition.key, None, None), (definition.key, original, None)]
     assert lifecycle == ["init", "quit"]
 
 
-@pytest.mark.parametrize("stage", ("solve", "player"))
-def test_shared_flow_quits_if_a_registered_stage_raises(lifecycle, stage):
-    from dataclasses import replace
+@pytest.mark.parametrize("error", (None, "입력한 영역을 확인하세요."))
+def test_solver_rejection_keeps_draft_and_shows_error(monkeypatch, lifecycle, error):
+    draft = (("A",),)
 
-    from puzzle_common.app import run_app
+    def solve(grid):
+        assert grid is draft
+        if error is not None:
+            raise ValueError(error)
+        return SimpleNamespace(outcome=Outcome.UNSOLVABLE)
 
-    def fail(*args):
+    definition = replace(app.DEFINITIONS[0], solve=solve)
+    monkeypatch.setattr(app, "DEFINITIONS", (definition,))
+    received = editor_sequence(
+        monkeypatch, ((draft, draft, False), (None, draft, True))
+    )
+    monkeypatch.setattr(
+        app,
+        "PlaybackScreen",
+        lambda *_: pytest.fail("Unsolvable results must return to the editor"),
+        raising=False,
+    )
+    asyncio.run(app.run_app(initial_key=definition.key))
+    assert received == [
+        (definition.key, None, None),
+        (definition.key, draft, error or app.UNSOLVABLE_MESSAGE),
+    ]
+    assert lifecycle == ["init", "quit"]
+
+
+def test_window_close_in_editor_exits_without_selector(monkeypatch, lifecycle):
+    editor_sequence(monkeypatch, ((None, (), True),))
+    select_sequence(monkeypatch, ())
+    asyncio.run(app.run_app(initial_key="meow"))
+    assert lifecycle == ["init", "quit"]
+
+
+def test_return_to_selector_drops_stale_error_and_preserves_changed_draft(
+    monkeypatch, lifecycle
+):
+    original, changed = (("A",),), (("B",),)
+    definition = replace(
+        app.DEFINITIONS[0],
+        solve=lambda _: SimpleNamespace(outcome=Outcome.UNSOLVABLE),
+    )
+    monkeypatch.setattr(app, "DEFINITIONS", (definition,))
+    received = editor_sequence(
+        monkeypatch,
+        ((original, original, False), (None, changed, False), (None, changed, True)),
+    )
+    select_sequence(monkeypatch, (definition.key,))
+
+    asyncio.run(app.run_app(initial_key=definition.key))
+
+    assert received == [
+        (definition.key, None, None),
+        (definition.key, original, app.UNSOLVABLE_MESSAGE),
+        (definition.key, changed, None),
+    ]
+    assert lifecycle == ["init", "quit"]
+
+
+def test_invalid_initial_key_is_rejected_before_initialization(lifecycle):
+    with pytest.raises(ValueError, match="unknown"):
+        asyncio.run(app.run_app(initial_key="unknown"))
+    assert lifecycle == []
+
+
+@pytest.mark.parametrize("stage", ("editor", "solve", "player"))
+def test_failure_always_closes_pygame(monkeypatch, lifecycle, stage):
+    def fail(*_args, **_kwargs):
         raise RuntimeError(f"{stage} failed")
 
-    plugin = PuzzlePlugin(
-        lambda *_: screen(object()),
-        lambda _: result_with(Outcome.UNIQUE),
-        lambda *_: screen(None),
-        lambda _: object(),
+    definition = replace(
+        app.DEFINITIONS[0],
+        solve=fail
+        if stage == "solve"
+        else lambda _: SimpleNamespace(outcome=Outcome.UNIQUE),
     )
-    plugin = replace(plugin, **{"solve" if stage == "solve" else "create_player": fail})
+    monkeypatch.setattr(app, "DEFINITIONS", (definition,))
+    editor_sequence(monkeypatch, (((), (), False),))
+    if stage == "editor":
+        monkeypatch.setattr(app, "InputDialog", fail, raising=False)
+    monkeypatch.setattr(app, "PlaybackScreen", fail, raising=False)
     with pytest.raises(RuntimeError, match=f"{stage} failed"):
-        asyncio.run(run_app(plugin))
-
+        asyncio.run(app.run_app(initial_key=definition.key))
     assert lifecycle == ["init", "quit"]
+
+
+def test_browser_query_is_validated_at_composition_root(monkeypatch):
+    import platform
+
+    monkeypatch.setattr(app, "sys", SimpleNamespace(platform="emscripten"))
+    location = SimpleNamespace(search="?puzzle=sudoku")
+    monkeypatch.setattr(
+        platform, "window", SimpleNamespace(location=location), raising=False
+    )
+    assert app._browser_initial_key() == "sudoku"
+    location.search = "?puzzle=unknown"
+    assert app._browser_initial_key() is None
+    location.search = "?unrelated=sudoku"
+    assert app._browser_initial_key() is None
+
+
+def test_browser_query_is_read_once_across_mode_switches(monkeypatch, lifecycle):
+    reads = []
+
+    def browser_key():
+        reads.append("read")
+        return "meow"
+
+    monkeypatch.setattr(app, "_browser_initial_key", browser_key)
+    editor_sequence(monkeypatch, ((None, (), False), (None, (), True)))
+    select_sequence(monkeypatch, ("sudoku",))
+    asyncio.run(app.run_app())
+    assert reads == ["read"]
+    assert lifecycle == ["init", "quit"]
+
+
+def test_player_window_close_exits_without_reopening_editor(monkeypatch, lifecycle):
+    definition = replace(
+        app.DEFINITIONS[0],
+        solve=lambda _: SimpleNamespace(outcome=Outcome.UNIQUE),
+    )
+    monkeypatch.setattr(app, "DEFINITIONS", (definition,))
+    received = editor_sequence(monkeypatch, (((), (), False),))
+
+    class Player:
+        def __init__(self, *_):
+            pass
+
+        async def run(self):
+            return False
+
+    monkeypatch.setattr(app, "PlaybackScreen", Player)
+    asyncio.run(app.run_app(initial_key=definition.key))
+    assert len(received) == 1
+    assert lifecycle == ["init", "quit"]
+
+
+def test_selector_keyboard_mouse_and_window_close():
+    pygame.init()
+    try:
+        selector = app.PuzzleSelector()
+        selector.draw()
+        assert (
+            selector._handle_events(
+                [
+                    pygame.event.Event(pygame.KEYDOWN, key=pygame.K_DOWN, mod=0),
+                    pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, mod=0),
+                ]
+            )
+            == app.DEFINITIONS[1].key
+        )
+        assert (
+            selector._handle_events(
+                [
+                    pygame.event.Event(
+                        pygame.KEYDOWN, key=pygame.K_TAB, mod=pygame.KMOD_SHIFT
+                    ),
+                    pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, mod=0),
+                ]
+            )
+            == app.DEFINITIONS[0].key
+        )
+        assert (
+            selector._handle_events(
+                [
+                    pygame.event.Event(
+                        pygame.MOUSEBUTTONDOWN,
+                        button=1,
+                        pos=selector.buttons[1].rect.center,
+                    )
+                ]
+            )
+            == app.DEFINITIONS[1].key
+        )
+        assert (
+            selector._handle_events(
+                [
+                    pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, mod=0),
+                    pygame.event.Event(pygame.QUIT),
+                ]
+            )
+            == "quit"
+        )
+    finally:
+        pygame.quit()

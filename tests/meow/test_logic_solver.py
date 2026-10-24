@@ -1,8 +1,8 @@
 import pytest
 
-from meow.logic_solver import solve_logically
+from meow.definition import load_preset
 from meow.model import Puzzle
-from meow.puzzle_catalog import load_preset
+from meow.solver import solve_logically
 from meow.state import CellState, LogicSnapshot, LogicState
 from puzzle_common.engine import LogicStatus
 

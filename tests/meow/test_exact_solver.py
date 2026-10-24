@@ -1,6 +1,6 @@
+from meow.definition import load_preset
 from meow.exact_solver import ExactStatus, verify_exact
 from meow.model import Puzzle
-from meow.puzzle_catalog import load_preset
 
 
 def _puzzle(*rows: str) -> Puzzle:

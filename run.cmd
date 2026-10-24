@@ -3,12 +3,17 @@ chcp 65001 >nul
 setlocal
 set "PYTHONUTF8=1"
 set "PUZZLE_APP=%~1"
-if not defined PUZZLE_APP set "PUZZLE_APP=meow"
-if /I "%PUZZLE_APP%"=="meow" goto run
-if /I "%PUZZLE_APP%"=="sudoku" goto run
+if not defined PUZZLE_APP set "PUZZLE_APP=puzzle_common"
+if "%PUZZLE_APP%"=="puzzle_common" goto run
+if "%PUZZLE_APP%"=="meow" goto run
+if "%PUZZLE_APP%"=="sudoku" goto run
 echo 사용법: run.cmd [meow^|sudoku]
 exit /b 2
 :run
+if not "%~2"=="" (
+    echo 사용법: run.cmd [meow^|sudoku]
+    exit /b 2
+)
 pushd "%~dp0" || exit /b 1
 where uv >nul 2>nul
 if errorlevel 1 goto missing_uv

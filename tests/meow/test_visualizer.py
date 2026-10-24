@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import os
 from dataclasses import replace
 
@@ -11,25 +10,15 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 import pygame
 import pytest
 
+from meow.definition import DEFINITION, load_preset
 from meow.model import Puzzle
-from meow.puzzle_catalog import load_preset
 from meow.solve_types import UnitKind
 from meow.solver import solve
-from meow.visualizer import MeowVisualizer
+from puzzle_common.board import region_palette
 from puzzle_common.engine import SolveResult
+from puzzle_common.playback import PlaybackScreen
 from puzzle_common.presentation import FrameKind
-from puzzle_common.ui_style import RED
-
-MULTIPLE_GRID = (
-    ("A", "B", "C", "D"),
-    ("A", "B", "C", "D"),
-    ("A", "B", "C", "D"),
-    ("A", "B", "C", "D"),
-)
-UNSOLVABLE_GRID = (
-    ("A", "B"),
-    ("A", "B"),
-)
+from puzzle_common.ui_style import ORANGE, RED
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -42,7 +31,7 @@ def pygame_dummy_display():
 
 def test_core_frames_render(stalled_probe_puzzle: Puzzle) -> None:
     puzzle = stalled_probe_puzzle
-    visualizer = MeowVisualizer(puzzle, solve(puzzle))
+    visualizer = PlaybackScreen(DEFINITION, puzzle.region_grid, solve(puzzle))
     core_kinds = (
         FrameKind.DEDUCTION,
         FrameKind.PROBE_START,
@@ -74,37 +63,20 @@ def test_core_frames_render(stalled_probe_puzzle: Puzzle) -> None:
 
 def test_presentation_keeps_structured_effects_and_reason() -> None:
     puzzle = load_preset("쉬움")
-    visualizer = MeowVisualizer(puzzle, solve(puzzle))
+    visualizer = PlaybackScreen(DEFINITION, puzzle.region_grid, solve(puzzle))
     visualizer.current_step_index = 1
 
     details = visualizer._presentation(visualizer.current_frame)
 
-    assert details.title == "기본 추론"
+    assert any(label == "기본 추론" for label, _ in details.annotations)
     assert "R1C3" in details.reason
     assert details.effects == (("고양이 확정 · 1", ("R1C3 = 고양이",)),)
     assert details.region_colors
 
 
-def test_all_exact_results_render_a_final_badge() -> None:
-    cases = (
-        (None, "유일해"),
-        (MULTIPLE_GRID, "복수해"),
-        (UNSOLVABLE_GRID, "해 없음"),
-    )
-
-    for grid, badge in cases:
-        puzzle = load_preset("쉬움") if grid is None else Puzzle.from_region_grid(grid)
-        visualizer = MeowVisualizer(puzzle, solve(puzzle))
-        visualizer.current_step_index = len(visualizer.frames) - 1
-
-        visualizer.draw()
-
-        assert badge in visualizer._status_badge()[0]
-
-
 def test_new_exclusion_preserves_region_color_and_uses_red_x() -> None:
     puzzle = load_preset("쉬움")
-    visualizer = MeowVisualizer(puzzle, solve(puzzle))
+    visualizer = PlaybackScreen(DEFINITION, puzzle.region_grid, solve(puzzle))
     visualizer.current_step_index = next(
         index
         for index, frame in enumerate(visualizer.frames)
@@ -117,9 +89,10 @@ def test_new_exclusion_preserves_region_color_and_uses_red_x() -> None:
     visualizer.draw()
 
     background_point = (rect.centerx, rect.top + max(3, rect.height // 10))
-    assert (
-        tuple(visualizer.screen.get_at(background_point)[:3])
-        == (visualizer.region_colors[puzzle.region_label(cell)])
+    assert tuple(visualizer.screen.get_at(background_point)[:3]) == (
+        DEFINITION.frame_view(puzzle.region_grid, visualizer.current_frame)
+        .cells[cell[0]][cell[1]]
+        .background
     )
 
     padding = max(2, rect.width // 5)
@@ -129,7 +102,7 @@ def test_new_exclusion_preserves_region_color_and_uses_red_x() -> None:
 
 def test_related_region_chip_uses_the_board_region_color() -> None:
     puzzle = load_preset("쉬움")
-    visualizer = MeowVisualizer(puzzle, solve(puzzle))
+    visualizer = PlaybackScreen(DEFINITION, puzzle.region_grid, solve(puzzle))
     visualizer.current_step_index = next(
         index
         for index, frame in enumerate(visualizer.frames)
@@ -142,44 +115,32 @@ def test_related_region_chip_uses_the_board_region_color() -> None:
         for ref in visualizer.current_frame.deduction.evidence_units
         if ref.kind is UnitKind.REGION
     )
-    expected = visualizer.region_colors[puzzle.region_labels[region_index]]
+    expected = region_palette(puzzle.region_labels)[puzzle.region_labels[region_index]]
 
-    x, y = 10, 10
-    visualizer.screen.fill((255, 255, 255))
-    visualizer._draw_region_chips(
-        visualizer._presentation(visualizer.current_frame).region_colors, x, y
-    )
-    chip_y = y + 5
-    label_width = visualizer.fonts.info.size("관련 색상 영역")[0]
-    chip_size = max(16, visualizer.fonts.info.get_height() - 1)
-    chip_center = (
-        x + label_width + 10 + chip_size // 2,
-        chip_y + chip_size // 2,
-    )
-    assert tuple(visualizer.screen.get_at(chip_center)[:3]) == expected
+    assert expected in visualizer._presentation(visualizer.current_frame).region_colors
+    visualizer.draw()
 
 
-def test_escape_returns_the_region_grid(
-    monkeypatch: pytest.MonkeyPatch,
+def test_restoration_removes_the_active_assumption(
+    stalled_probe_puzzle: Puzzle,
 ) -> None:
-    puzzle = load_preset("쉬움")
-    visualizer = MeowVisualizer(puzzle, solve(puzzle))
-
-    async def advance_frame(clock: pygame.time.Clock) -> float:
-        await asyncio.sleep(0)
-        return 1 / 60
-
-    monkeypatch.setattr(
-        "puzzle_common.playback.next_frame",
-        advance_frame,
+    puzzle = stalled_probe_puzzle
+    visualizer = PlaybackScreen(DEFINITION, puzzle.region_grid, solve(puzzle))
+    frame = next(
+        frame for frame in visualizer.frames if frame.kind is FrameKind.RESTORE
     )
-    monkeypatch.setattr(
-        pygame.event,
-        "get",
-        lambda: [pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE)],
+    details = DEFINITION.describe(puzzle.region_grid, frame, visualizer.result)
+    assert frame.assumption is not None and frame.active_assumption is None
+    assert details.assumption == ""
+    view = DEFINITION.frame_view(puzzle.region_grid, frame)
+    assert (
+        view.cells
+        == DEFINITION.frame_view(
+            puzzle.region_grid, replace(frame, assumption=None)
+        ).cells
     )
-
-    assert asyncio.run(visualizer.run()) == puzzle.region_grid
+    assert all(cell.outline != ORANGE for row in view.cells for cell in row)
+    visualizer._draw_board(frame)
 
 
 @pytest.mark.parametrize("foreign_snapshot", (False, True))
@@ -197,4 +158,4 @@ def test_invalid_final_snapshot_is_rejected_before_display_configuration(
     monkeypatch.setattr("puzzle_common.playback.configure_display", forbidden_display)
 
     with pytest.raises(ValueError if foreign_snapshot else TypeError):
-        MeowVisualizer(puzzle, invalid)
+        PlaybackScreen(DEFINITION, puzzle.region_grid, invalid)

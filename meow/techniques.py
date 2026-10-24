@@ -1,7 +1,7 @@
 """상태를 변경하지 않는 결정적 추론 finder 모음.
 
 각 finder는 현재 snapshot에서 안정적인 순서로 첫 번째 추론만 반환한다.
-후보를 실제로 지우거나 고양이를 놓는 일은 :mod:`meow.logic_solver`만 한다.
+후보를 실제로 지우거나 고양이를 놓는 일은 :mod:`meow.solver`만 한다.
 """
 
 from __future__ import annotations

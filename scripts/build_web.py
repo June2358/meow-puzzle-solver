@@ -1,4 +1,4 @@
-"""Build isolated Pygbag applications and a shared puzzle selection page."""
+"""Build one Pygbag application and redirects for previous puzzle URLs."""
 
 import os
 import shutil
@@ -9,38 +9,21 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BUILD_ROOT = PROJECT_ROOT / "build"
 WEB_OUTPUT = BUILD_ROOT / "web"
-APPLICATIONS = {
-    "meow": (
-        "meow-puzzle-solver",
-        "980",
-        "io.github.june2358.meow_puzzle_solver",
-        "MEOW — Queens Puzzle Solver",
-    ),
-    "sudoku": (
-        "simple-sudoku-solver",
-        "960",
-        "io.github.june2358.simple_sudoku_solver",
-        "Sudoku Solver",
-    ),
-}
+APP_NAME = "puzzle-solvers"
+RUNTIME_PACKAGES = ("puzzle_common", "meow", "sudoku")
 
 
-def _stage_root(app: str) -> Path:
-    if app not in APPLICATIONS:
-        raise ValueError(f"지원하지 않는 애플리케이션입니다: {app}")
-    return BUILD_ROOT / APPLICATIONS[app][0]
+def _stage_root() -> Path:
+    return BUILD_ROOT / APP_NAME
 
 
 def _clear_build_directory(path: Path) -> None:
     """Remove one known build subtree without allowing broader deletion."""
-
     resolved = path.resolve()
     build_root = BUILD_ROOT.resolve()
-    allowed = {BUILD_ROOT / settings[0] for settings in APPLICATIONS.values()}
-    allowed.add(WEB_OUTPUT)
     if (
         build_root != PROJECT_ROOT.resolve() / "build"
-        or path not in allowed
+        or path not in {_stage_root(), WEB_OUTPUT}
         or resolved != path.absolute()
         or resolved == build_root
         or not resolved.is_relative_to(build_root)
@@ -52,24 +35,22 @@ def _clear_build_directory(path: Path) -> None:
         shutil.rmtree(resolved)
 
 
-def stage_runtime_files(app: str) -> Path:
-    """Copy only files required by the browser runtime into the Pygbag app."""
-
-    stage_root = _stage_root(app)
-    entry_point = PROJECT_ROOT / f"main_{app}.py"
+def stage_runtime_files() -> Path:
+    """Copy the shared entry point, both puzzle definitions, and runtime assets."""
+    stage_root = _stage_root()
+    entry_point = PROJECT_ROOT / "main.py"
     if not entry_point.is_file():
         raise FileNotFoundError(f"Pygbag 진입점을 찾을 수 없습니다: {entry_point}")
-    for name in (app, "puzzle_common"):
+    for name in RUNTIME_PACKAGES:
         package = PROJECT_ROOT / name
         if not package.is_dir():
             raise FileNotFoundError(
                 f"애플리케이션 패키지를 찾을 수 없습니다: {package}"
             )
-
     _clear_build_directory(stage_root)
     stage_root.mkdir(parents=True)
     shutil.copy2(entry_point, stage_root / "main.py")
-    for name in (app, "puzzle_common"):
+    for name in RUNTIME_PACKAGES:
         shutil.copytree(
             PROJECT_ROOT / name,
             stage_root / name,
@@ -78,11 +59,8 @@ def stage_runtime_files(app: str) -> Path:
     return stage_root
 
 
-def pygbag_command(app: str) -> list[str]:
-    """Return the pinned Pygbag build command for this application."""
-
-    stage_root = _stage_root(app)
-    app_name, width, package, title = APPLICATIONS[app]
+def pygbag_command() -> list[str]:
+    """Return the pinned build command for the single application."""
     return [
         sys.executable,
         "-m",
@@ -95,55 +73,50 @@ def pygbag_command(app: str) -> list[str]:
         "--PYBUILD",
         "3.12",
         "--width",
-        width,
+        "1010",
         "--height",
-        "680",
+        "700",
         "--app_name",
-        app_name,
+        APP_NAME,
         "--package",
-        package,
+        "io.github.june2358.puzzle_solvers",
         "--title",
-        title,
+        "Puzzle Solvers",
         "--build",
-        str(stage_root),
+        str(_stage_root()),
     ]
 
 
 def _validate_pygbag_output(output: Path) -> None:
     """Reject incomplete output before it can become a Pages artifact."""
-
     if not (output / "index.html").is_file():
         raise RuntimeError("Pygbag Web 산출물에 index.html이 없습니다.")
-    if not any(path.is_file() for path in output.glob("*.apk")):
-        raise RuntimeError("Pygbag Web 산출물에 애플리케이션 APK가 없습니다.")
+    if sum(path.is_file() for path in output.glob("*.apk")) != 1:
+        raise RuntimeError(
+            "Pygbag Web 산출물에는 애플리케이션 APK가 하나 있어야 합니다."
+        )
 
 
 def build_web() -> None:
-    """Build both applications before replacing the deployable site."""
-
+    """Validate the complete single bundle before replacing the deployable site."""
     environment = os.environ.copy()
     environment.setdefault("PYTHONUTF8", "1")
-    for app in APPLICATIONS:
-        stage_root = stage_runtime_files(app)
-        subprocess.run(
-            pygbag_command(app),
-            cwd=PROJECT_ROOT,
-            env=environment,
-            check=True,
-        )
-        _validate_pygbag_output(stage_root / "build" / "web")
-
+    stage_root = stage_runtime_files()
+    subprocess.run(pygbag_command(), cwd=PROJECT_ROOT, env=environment, check=True)
+    output = stage_root / "build/web"
+    _validate_pygbag_output(output)
     _clear_build_directory(WEB_OUTPUT)
-    for app in APPLICATIONS:
-        shutil.copytree(_stage_root(app) / "build" / "web", WEB_OUTPUT / app)
-    (WEB_OUTPUT / "index.html").write_text(
-        '<!doctype html>\n<html lang="ko">\n<meta charset="utf-8">\n'
-        '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-        "<title>퍼즐 솔버</title>\n<h1>퍼즐을 선택하세요</h1>\n"
-        '<ul><li><a href="meow/">MEOW 퀸즈 퍼즐</a></li>\n'
-        '<li><a href="sudoku/">스도쿠</a></li></ul>\n</html>\n',
-        encoding="utf-8",
-    )
+    shutil.copytree(output, WEB_OUTPUT)
+    for key in ("meow", "sudoku"):
+        redirect = WEB_OUTPUT / key
+        redirect.mkdir()
+        target = f"../?puzzle={key}"
+        (redirect / "index.html").write_text(
+            '<!doctype html>\n<html lang="ko">\n<meta charset="utf-8">\n'
+            f'<meta http-equiv="refresh" content="0;url={target}">\n'
+            f'<title>퍼즐 솔버</title>\n<a href="{target}">퍼즐 열기</a>\n</html>\n',
+            encoding="utf-8",
+        )
     print(f"Web build ready: {WEB_OUTPUT}")
 
 

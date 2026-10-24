@@ -50,6 +50,13 @@ def test_preset_then_start_returns_the_selected_puzzle() -> None:
     assert puzzle.region_grid == load_preset("어려움").region_grid
 
 
+def test_zero_width_region_label_is_skipped_when_drawing() -> None:
+    dialog = MeowInputDialog(initial_grid=(("\u200b",),))
+
+    assert dialog._fit_label("\u200b", dialog.fonts.heading, dialog.cell_size) == ""
+    dialog.draw()
+
+
 def test_direct_input_reports_an_empty_cell_then_starts_when_complete() -> None:
     dialog = MeowInputDialog(initial_grid=(("A", "A"), (None, "B")))
 

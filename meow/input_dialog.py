@@ -216,7 +216,10 @@ class MeowInputDialog(InputDialog[Puzzle]):
 
     @staticmethod
     def _fit_label(label: str, font: pygame.font.Font, width: int) -> str:
-        if font.size(label)[0] <= width:
+        label_width = font.size(label)[0]
+        if not label_width:
+            return ""
+        if label_width <= width:
             return label
         if not label.isascii():
             # shortcut: Unicode widths can shrink; use shaping-aware metrics if fitting is slow.

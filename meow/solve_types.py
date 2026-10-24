@@ -45,11 +45,11 @@ class SolverAlgorithm(StrEnum):
 
 
 SOLVER_ALGORITHM_LABELS: Final[dict[SolverAlgorithm, str]] = {
-    SolverAlgorithm.DIRECT_PROPAGATION: "Basic Deductions",
-    SolverAlgorithm.CONTAINER_MATCHING: "Container Locks",
-    SolverAlgorithm.UNIT_SUPPORT: "Crowding",
-    SolverAlgorithm.SINGLETON_PROBING: "One-Step Lookahead",
-    SolverAlgorithm.BACKTRACK_SEARCH: "Backtracking",
+    SolverAlgorithm.DIRECT_PROPAGATION: "기본 추론",
+    SolverAlgorithm.CONTAINER_MATCHING: "영역·행·열 잠금",
+    SolverAlgorithm.UNIT_SUPPORT: "단위 막힘",
+    SolverAlgorithm.SINGLETON_PROBING: "한 단계 가정",
+    SolverAlgorithm.BACKTRACK_SEARCH: "분기 탐색",
 }
 
 

@@ -79,7 +79,7 @@ def test_presentation_keeps_structured_effects_and_reason() -> None:
 
     details = visualizer._presentation(visualizer.current_frame)
 
-    assert details.title == "Basic Deductions"
+    assert details.title == "기본 추론"
     assert "R1C3" in details.reason
     assert details.effects == (("고양이 확정 · 1", ("R1C3 = 고양이",)),)
     assert details.region_colors

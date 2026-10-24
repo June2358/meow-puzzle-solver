@@ -46,6 +46,44 @@ def test_active_modal_blocks_background_edits_and_still_allows_quit(dialog):
     assert not dialog.running
 
 
+@pytest.mark.parametrize("key", [pygame.K_RETURN, pygame.K_3])
+def test_escape_discards_remaining_queued_events(dialog, key):
+    dialog._load_preset(0)
+    dialog.selected_cell = (0, 0)
+    before = str(getattr(dialog, "draft", getattr(dialog, "board", None)))
+
+    result = dialog._handle_events(
+        [
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE, mod=0),
+            pygame.event.Event(pygame.KEYDOWN, key=key, unicode="3", mod=0),
+        ]
+    )
+
+    assert result is None
+    assert not dialog.running
+    assert str(getattr(dialog, "draft", getattr(dialog, "board", None))) == before
+
+
+def test_quit_closes_modal_without_polling_it(dialog, monkeypatch):
+    import puzzle_common.input_dialog as common_input
+
+    class QuittingDialog(PendingDialog):
+        def poll(self):
+            pytest.fail("A closed input screen must not read browser input")
+
+    browser_dialog = QuittingDialog()
+    dialog._open_web_dialog(lambda: browser_dialog)
+
+    async def next_frame(clock):
+        return 0
+
+    monkeypatch.setattr(common_input, "next_frame", next_frame)
+    monkeypatch.setattr(pygame.event, "get", lambda: [pygame.event.Event(pygame.QUIT)])
+
+    assert asyncio.run(dialog.run()) is None
+    assert browser_dialog.closed
+
+
 def test_open_modal_is_cleaned_up_when_initial_drawing_fails(dialog, monkeypatch):
     browser_dialog = PendingDialog()
     dialog._open_web_dialog(lambda: browser_dialog)

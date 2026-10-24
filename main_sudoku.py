@@ -2,6 +2,8 @@
 
 import asyncio
 
+import pygame  # noqa: F401  # Pygbag preloads the WebAssembly module from this import.
+
 from puzzle_common.app import run_app
 from sudoku.app import PLUGIN
 

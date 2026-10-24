@@ -245,7 +245,7 @@ class InputDialog[PuzzleT]:
             if event.type == pygame.QUIT:
                 self.running = False
                 return None
-            if self._web_text_dialog is not None:
+            if not self.running or self._web_text_dialog is not None:
                 continue
             self._handle_editor_event(event)
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -427,14 +427,11 @@ class InputDialog[PuzzleT]:
             self.draw()
             while self.running:
                 await next_frame(clock)
-                modal_was_open = self._web_text_dialog is not None
-                dialog_changed = self._poll_web_text_dialog()
                 events = pygame.event.get()
-                if modal_was_open:
-                    events = [event for event in events if event.type == pygame.QUIT]
                 result = self._handle_events(events)
                 if result is not None:
                     return result
+                dialog_changed = self.running and self._poll_web_text_dialog()
                 if self.running and (events or dialog_changed):
                     self.draw()
             return None

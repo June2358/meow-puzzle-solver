@@ -38,6 +38,20 @@ def dialog() -> SudokuInputDialog:
     pygame.quit()
 
 
+@pytest.mark.parametrize(
+    ("key", "digit"),
+    [(pygame.K_KP0, 0), (pygame.K_KP1, 1), (pygame.K_KP9, 9)],
+)
+def test_numeric_keypad_edits_the_selected_cell(dialog, key, digit) -> None:
+    dialog.selected_cell = (0, 0)
+    dialog._set_cell(0, 0, 5)
+
+    dialog._handle_keydown(pygame.event.Event(pygame.KEYDOWN, key=key, mod=0))
+
+    assert dialog.board[0][0] == digit
+    assert not dialog.conflicting_cells
+
+
 def test_ctrl_v_then_start_returns_the_pasted_puzzle(
     dialog: SudokuInputDialog, monkeypatch: pytest.MonkeyPatch
 ) -> None:

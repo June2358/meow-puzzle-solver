@@ -4,15 +4,28 @@ MEOW Queens와 Sudoku를 함께 관리하는 pygame-ce 프로젝트입니다.
 논리 추론·한 단계 가정·반증·재귀 탐색, 입력/재생 화면과 웹 빌드를 공유합니다.
 각 퍼즐은 같은 상태/규칙 계약으로 데이터와 고유 기법을 제공하고, 결과 설명과 보드 표현을 연결합니다.
 
+공식 통합 저장소: <https://github.com/June2358/puzzle-solvers>
+
+- [웹에서 퍼즐 선택](https://june2358.github.io/puzzle-solvers/)
+- [MEOW Queens 실행](https://june2358.github.io/puzzle-solvers/meow/)
+- [Sudoku 실행](https://june2358.github.io/puzzle-solvers/sudoku/)
+
+기존 `meow-puzzle-solver` 저장소를 이 이름으로 변경했으며,
+`simple-sudoku-solver`의 코드와 Git 이력을 함께 보존합니다.
+앞으로 두 퍼즐의 수정과 이슈는 이 저장소에서 관리합니다.
+
 ## 개발 환경
 
-Python 3.12.2와 uv를 사용합니다.
+Python 3.12.15와 uv를 사용합니다.
 
 ```powershell
 uv sync --locked
 uv run python -m meow
 uv run python -m sudoku
 ```
+
+Windows에서는 `run.cmd`를 실행하면 MEOW를 시작합니다.
+`run.cmd sudoku`로 Sudoku를 시작할 수 있습니다.
 
 검사:
 

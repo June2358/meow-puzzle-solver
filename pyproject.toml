@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "MEOW Queens and Sudoku solvers with shared pygame infrastructure"
 authors = [{ name = "Lim Junmin", email = "dsgoat99@naver.com" }]
 readme = "README.md"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.12.15,<3.13"
 dependencies = [
     "pygame-ce==2.5.8",
 ]
@@ -12,10 +12,10 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest==9.1.1",
-    "ruff==0.16.4",
+    "ruff==0.17.2",
 ]
 web = [
-    "pygbag==0.9.2",
+    "pygbag==0.9.3",
 ]
 
 [tool.uv]

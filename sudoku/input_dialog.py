@@ -137,4 +137,4 @@ class SudokuInputDialog(InputDialog[Puzzle]):
         elif pygame.K_1 <= event.key <= pygame.K_9:
             self._set_cell(row, col, event.key - pygame.K_0)
         elif pygame.K_KP1 <= event.key <= pygame.K_KP9:
-            self._set_cell(row, col, event.key - pygame.K_KP0)
+            self._set_cell(row, col, event.key - pygame.K_KP1 + 1)

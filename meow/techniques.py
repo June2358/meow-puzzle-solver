@@ -246,29 +246,6 @@ _HALL_KIND_PAIRS: Final[tuple[tuple[UnitKind, UnitKind], ...]] = (
 _MAX_HALL_SIZE: Final = 3
 
 
-def _hall_exclusions(
-    state: LogicSnapshot,
-    source_kind: UnitKind,
-    target_kind: UnitKind,
-    source_indices: tuple[int, ...],
-    target_indices: frozenset[int],
-) -> tuple[Cell, ...]:
-    """예약된 target 단위에서 선택된 source 밖 후보를 반환한다."""
-
-    puzzle = state.puzzle
-    selected_sources = frozenset(source_indices)
-    cells: set[Cell] = set()
-    target_units = _units(puzzle, target_kind)
-    for target_index in target_indices:
-        for cell in target_units[target_index]:
-            if not state.is_possible(cell):
-                continue
-            if _unit_index(puzzle, source_kind, cell) in selected_sources:
-                continue
-            cells.add(cell)
-    return tuple(sorted(cells))
-
-
 def find_hall_lock(state: LogicSnapshot) -> Deduction | None:
     """행·열·영역 파티션 사이의 첫 Hall lock을 찾는다.
 
@@ -280,6 +257,10 @@ def find_hall_lock(state: LogicSnapshot) -> Deduction | None:
 
     puzzle = state.puzzle
     for source_kind, target_kind in _HALL_KIND_PAIRS:
+        target_candidates = tuple(
+            frozenset(state.candidates_for(unit))
+            for unit in _units(puzzle, target_kind)
+        )
         active: list[tuple[int, tuple[Cell, ...], frozenset[int]]] = []
         for source_index, _, candidates in _active_units(state, source_kind):
             targets = frozenset(
@@ -299,13 +280,13 @@ def find_hall_lock(state: LogicSnapshot) -> Deduction | None:
                     continue
 
                 source_indices = tuple(item[0] for item in subset)
-                exclusions = _hall_exclusions(
-                    state,
-                    source_kind,
-                    target_kind,
-                    source_indices,
-                    target_indices,
+                targets = set().union(
+                    *(target_candidates[index] for index in target_indices)
                 )
+                targets.difference_update(
+                    cell for _, candidates, _ in subset for cell in candidates
+                )
+                exclusions = tuple(sorted(targets))
                 if not exclusions:
                     continue
 

@@ -20,6 +20,7 @@ from puzzle_common.ui_style import (
     ORANGE_LIGHT,
     RED,
     RED_LIGHT,
+    wrap_text,
 )
 from sudoku.board import Puzzle
 from sudoku.definition import DEFINITION as SUDOKU
@@ -138,7 +139,7 @@ def test_draw_delivers_the_exact_current_frame_to_both_hooks(playback, monkeypat
 
 
 @pytest.mark.parametrize("app", ("regions", "digits"))
-def test_all_builtin_frames_render_effects_within_the_details_area(app, monkeypatch):
+def test_all_builtin_frames_render_effects_within_the_details_area(app):
     pygame.init()
     puzzles = (
         [load_preset(name) for name in PRESET_NAMES]
@@ -151,31 +152,28 @@ def test_all_builtin_frames_render_effects_within_the_details_area(app, monkeypa
             if app == "regions"
             else PlaybackScreen(SUDOKU, puzzle.grid, solve_sudoku(puzzle))
         )
-        draw_effects = view._draw_effect_items
-        visible_groups = []
-
-        def check_effects(
-            items,
-            x,
-            y,
-            *,
-            draw_effects=draw_effects,
-            visible_groups=visible_groups,
-            **kwargs,
-        ):
-            bottom = draw_effects(items, x, y, **kwargs)
-            assert y < bottom <= kwargs["max_y"]
-            visible_groups.append(items)
-            return bottom
-
-        monkeypatch.setattr(view, "_draw_effect_items", check_effects)
         for index, frame in enumerate(view.frames):
             view._set_index(index)
-            visible_groups.clear()
             view.draw()
-            assert visible_groups == [
-                items for _, items in view._presentation(frame).effects
-            ]
+            details = view._presentation(frame)
+            text = "".join(
+                line for line, _ in view._detail_rows(details, view.details_rect.width)
+            )
+            assert (
+                "".join(
+                    wrap_text(
+                        details.reason or details.title,
+                        view.fonts.body,
+                        view.details_rect.width,
+                    )
+                )
+                in text
+            )
+            for _, items in details.effects:
+                assert all(item in text for item in items)
+            view._scroll_details(10_000)
+            assert view.details_scroll == view.details_max_scroll
+            assert view.details_rect.bottom < view.previous_button.rect.top
     pygame.display.quit()
 
 

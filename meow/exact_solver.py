@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from puzzle_common.constraints import has_distinct_representatives
+
 from .model import Cell, Puzzle
 
 
@@ -109,6 +111,20 @@ class ExactVerifier:
                 best_candidates = unit_candidates
                 best_count = candidate_count
             remaining_units ^= unit_bit
+
+        size = self.puzzle.size
+        region_candidates = tuple(
+            self._unit_masks[index] & candidates
+            for index in range(2 * size, 3 * size)
+            if uncovered_units & (1 << index)
+        )
+        for lines in (self._unit_masks[:size], self._unit_masks[size : 2 * size]):
+            domains = tuple(
+                sum(1 << index for index, line in enumerate(lines) if region & line)
+                for region in region_candidates
+            )
+            if not has_distinct_representatives(domains):
+                return
 
         remaining_candidates = best_candidates
         while remaining_candidates:

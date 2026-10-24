@@ -6,7 +6,7 @@ import pygame
 
 from .board import draw_board
 from .engine import Outcome, SolveResult
-from .layout import get_board_layout
+from .layout import TOUCH_SIZE, get_board_layout
 from .presentation import PlaybackFrame, build_frames
 from .puzzle import PuzzleDefinition
 from .runtime import next_frame
@@ -81,7 +81,7 @@ class PlaybackScreen:
         self.board_rect = layout.board_rect
         self.board_origin = self.board_rect.topleft
         self.panel_rect = layout.panel_rect
-        self.fonts = get_fonts()
+        self.fonts = get_fonts(number_size=layout.number_font_size)
         self.screen = configure_display(
             layout.window_size, f"{definition.title} · 풀이 과정"
         )
@@ -93,16 +93,37 @@ class PlaybackScreen:
         self._active_navigation_source: _NavigationSource | None = None
         self._navigation_repeat_timer = 0.0
         self._navigation_repeat_started = False
+        self.details_scroll = 0
+        self.details_max_scroll = 0
+        self.details_page_size = 1
         self._init_buttons()
+
+    def _refresh_layout(self) -> bool:
+        layout = get_board_layout(self._board_size)
+        if layout == self.layout:
+            return False
+        self.layout = layout
+        self.cell_size = layout.cell_size
+        self.board_rect = layout.board_rect
+        self.board_origin = self.board_rect.topleft
+        self.panel_rect = layout.panel_rect
+        self.screen = configure_display(
+            layout.window_size, f"{self.definition.title} · 풀이 과정"
+        )
+        self.fonts = get_fonts(number_size=layout.number_font_size)
+        self._clear_navigation_holds()
+        self._init_buttons()
+        return True
 
     def _init_buttons(self) -> None:
         x = self.panel_rect.left + 16
         width = self.panel_rect.width - 32
         third = (width - 16) // 3
-        y = self.panel_rect.bottom - 112
+        height = TOUCH_SIZE if self.layout.stacked else 38
+        y = self.panel_rect.bottom - (2 * height + 36)
         self.previous_button, self.play_button, self.next_button = (
             Button(
-                pygame.Rect(x + index * (third + 8), y, third, 38),
+                pygame.Rect(x + index * (third + 8), y, third, height),
                 text,
                 color,
                 self.fonts.button,
@@ -112,7 +133,7 @@ class PlaybackScreen:
             )
         )
         self.edit_button = Button(
-            pygame.Rect(x, y + 50, width, 38),
+            pygame.Rect(x, y + height + 12, width, height),
             "문제 입력으로 돌아가기",
             PRIMARY_DARK,
             self.fonts.button,
@@ -152,9 +173,9 @@ class PlaybackScreen:
             return "해 없음 · 유효한 배치 없음", RED, RED_LIGHT
         return "유일해", ACCENT, ACCENT_LIGHT
 
-    def _draw_coordinates(self) -> None:
-        if self.cell_size < 18:
-            return
+    def _coordinate_labels(self) -> tuple[tuple[str, pygame.Rect], ...]:
+        labels = []
+        last_column_right = last_row_bottom = -1
         for index in range(self._board_size):
             for text, center in (
                 (
@@ -167,13 +188,27 @@ class PlaybackScreen:
                 (
                     f"R{index + 1}",
                     (
-                        self.board_rect.left - 17,
+                        self.board_rect.left - 18,
                         self.layout.cell_rect((index, 0)).centery,
                     ),
                 ),
             ):
-                label = self.fonts.info.render(text, True, GRAY)
-                self.screen.blit(label, label.get_rect(center=center))
+                rect = pygame.Rect((0, 0), self.fonts.info.size(text))
+                rect.center = center
+                if text.startswith("C"):
+                    if rect.left <= last_column_right + 3:
+                        continue
+                    last_column_right = rect.right
+                else:
+                    if rect.top <= last_row_bottom + 3:
+                        continue
+                    last_row_bottom = rect.bottom
+                labels.append((text, rect))
+        return tuple(labels)
+
+    def _draw_coordinates(self) -> None:
+        for text, rect in self._coordinate_labels():
+            self.screen.blit(self.fonts.info.render(text, True, GRAY), rect)
 
     def draw(self) -> None:
         self.screen.fill(APP_BACKGROUND)
@@ -234,29 +269,9 @@ class PlaybackScreen:
         y += 18
         bottom = self.previous_button.rect.top - 42
         details_bottom = bottom - (36 if details.assumption else 0)
-        self.screen.blit(self.fonts.body.render("사유", True, PRIMARY), (x, y))
-        y += 23
-        # Leave room for structured effects when a producer supplies a long reason.
-        reason_bottom = (
-            y + max(0, (details_bottom - y) // 2) if details.effects else details_bottom
+        self._draw_details(
+            details, pygame.Rect(x, y, width, max(1, details_bottom - y))
         )
-        y = self._draw_wrapped(
-            details.reason or details.title,
-            x,
-            y,
-            color=GRAY,
-            max_width=width,
-            max_y=reason_bottom,
-        )
-        for label, items in details.effects:
-            if y + 23 > details_bottom:
-                break
-            y += 6
-            self.screen.blit(self.fonts.info.render(label, True, PRIMARY), (x, y))
-            y += 20
-            y = self._draw_effect_items(
-                items, x, y, max_width=width, max_y=details_bottom
-            )
         if details.assumption:
             self.screen.blit(
                 self.fonts.body.render(
@@ -287,6 +302,75 @@ class PlaybackScreen:
                 ),
             )
 
+    def _detail_rows(
+        self, details: PlaybackDetails, width: int
+    ) -> tuple[tuple[str, Color], ...]:
+        rows = [
+            (line, GRAY)
+            for line in wrap_text(
+                details.reason or details.title, self.fonts.body, width
+            )
+        ]
+        for label, items in details.effects:
+            rows.append((label, PRIMARY))
+            rows.extend(
+                (line, GRAY)
+                for packed in _pack_effect_items(items, self.fonts.body, width)
+                for line in wrap_text(packed, self.fonts.body, width)
+            )
+        return tuple(rows)
+
+    def _draw_details(self, details: PlaybackDetails, area: pygame.Rect) -> None:
+        self.details_up_button, self.details_down_button = (
+            Button(
+                pygame.Rect(
+                    area.right - (2 - index) * (TOUCH_SIZE + 6),
+                    area.top,
+                    TOUCH_SIZE,
+                    TOUCH_SIZE,
+                ),
+                text,
+                PRIMARY,
+                self.fonts.button,
+            )
+            for index, text in enumerate(("↑", "↓"))
+        )
+        self.details_rect = pygame.Rect(
+            area.left,
+            area.top + TOUCH_SIZE + 6,
+            area.width,
+            max(1, area.height - TOUCH_SIZE - 6),
+        )
+        rows = self._detail_rows(details, self.details_rect.width)
+        line_height = self.fonts.body.get_linesize() + 2
+        visible = max(1, self.details_rect.height // line_height)
+        self.details_page_size = max(1, visible - 1)
+        self.details_max_scroll = max(0, len(rows) - visible)
+        self._scroll_details(0)
+        label = "사유 · 결과"
+        if self.details_max_scroll:
+            label += f" {self.details_scroll + 1}/{len(rows)}줄"
+        self.screen.blit(
+            self.fonts.info.render(label, True, PRIMARY), (area.left, area.top + 12)
+        )
+        previous_clip = self.screen.get_clip()
+        self.screen.set_clip(self.details_rect)
+        for index, (text, color) in enumerate(
+            rows[self.details_scroll : self.details_scroll + visible]
+        ):
+            self.screen.blit(
+                self.fonts.body.render(text, True, color),
+                (area.left, self.details_rect.top + index * line_height),
+            )
+        self.screen.set_clip(previous_clip)
+        for button in (self.details_up_button, self.details_down_button):
+            button.draw(self.screen)
+
+    def _scroll_details(self, offset: int) -> None:
+        self.details_scroll = max(
+            0, min(self.details_max_scroll, self.details_scroll + offset)
+        )
+
     def _draw_region_chips(self, colors: tuple[Color, ...], x: int, y: int) -> int:
         if not colors:
             return y
@@ -296,6 +380,9 @@ class PlaybackScreen:
         chip_x = x + label.get_width() + 10
         chip_size = max(16, self.fonts.info.get_height() - 1)
         for color in colors:
+            if chip_x + chip_size > self.panel_rect.right - 18:
+                chip_x = x
+                y += chip_size + 6
             rect = pygame.Rect(chip_x, y, chip_size, chip_size)
             pygame.draw.rect(self.screen, color, rect, border_radius=4)
             pygame.draw.rect(self.screen, BLACK, rect, width=2, border_radius=4)
@@ -311,15 +398,13 @@ class PlaybackScreen:
         color: Color,
         font: pygame.font.Font,
         max_y: int,
-        effects: bool = False,
     ) -> int:
         line_height = font.get_linesize() + 2
         available = max(0, (max_y - y) // line_height)
         if len(lines) > available:
             if not available:
                 return y
-            hidden = len(lines) - available + 1
-            lines = (*lines[: available - 1], f"… 외 {hidden}줄" if effects else "…")
+            lines = (*lines[: available - 1], "…")
         for line in lines:
             self.screen.blit(font.render(line, True, color), (x, y))
             y += line_height
@@ -341,25 +426,6 @@ class PlaybackScreen:
             wrap_text(text, font, max_width), x, y, color=color, font=font, max_y=max_y
         )
 
-    def _draw_effect_items(
-        self,
-        items: tuple[str, ...],
-        x: int,
-        y: int,
-        *,
-        max_width: int,
-        max_y: int,
-    ) -> int:
-        return self._draw_lines(
-            _pack_effect_items(items, self.fonts.body, max_width),
-            x,
-            y,
-            color=GRAY,
-            font=self.fonts.body,
-            max_y=max_y,
-            effects=True,
-        )
-
     def _navigate(self, offset: int) -> bool:
         target = max(0, min(self.frame_count - 1, self.current_step_index + offset))
         if target == self.current_step_index:
@@ -370,6 +436,7 @@ class PlaybackScreen:
     def _set_index(self, index: int) -> None:
         self.current_step_index = max(0, min(self.frame_count - 1, index))
         self.autoplay_timer = 0.0
+        self.details_scroll = 0
 
     def _toggle_autoplay(self) -> None:
         self._clear_navigation_holds()
@@ -449,12 +516,26 @@ class PlaybackScreen:
             self._set_index(0 if event.key == pygame.K_HOME else self.frame_count - 1)
         elif event.key == pygame.K_SPACE:
             self._toggle_autoplay()
+        elif event.key in (pygame.K_PAGEUP, pygame.K_PAGEDOWN):
+            self._scroll_details(
+                -self.details_page_size
+                if event.key == pygame.K_PAGEUP
+                else self.details_page_size
+            )
         return None
 
     def _handle_mouse_down(self, event: pygame.event.Event) -> str | None:
         if event.button != 1:
             return None
-        if self.previous_button.is_clicked(event.pos):
+        if hasattr(self, "details_up_button") and self.details_up_button.is_clicked(
+            event.pos
+        ):
+            self._scroll_details(-1)
+        elif hasattr(
+            self, "details_down_button"
+        ) and self.details_down_button.is_clicked(event.pos):
+            self._scroll_details(1)
+        elif self.previous_button.is_clicked(event.pos):
             self._begin_navigation_hold(("mouse", event.button), -1)
         elif self.play_button.is_clicked(event.pos):
             self._toggle_autoplay()
@@ -486,6 +567,8 @@ class PlaybackScreen:
                     return action
             elif event.type == pygame.MOUSEBUTTONUP:
                 self._end_navigation_hold(("mouse", event.button))
+            elif event.type == pygame.MOUSEWHEEL:
+                self._scroll_details(-event.y * 3)
         return None
 
     async def run(self) -> bool:
@@ -493,6 +576,7 @@ class PlaybackScreen:
         self.draw()
         while self.running:
             elapsed = await next_frame(clock)
+            layout_changed = self._refresh_layout()
             navigation_source = self._active_navigation_source
             autoplay_was_enabled = self.autoplay_enabled
             events = pygame.event.get()
@@ -500,7 +584,7 @@ class PlaybackScreen:
                 return True
             if not self.running:
                 break
-            changed = bool(events)
+            changed = bool(events) or layout_changed
             if (
                 navigation_source is not None
                 and navigation_source == self._active_navigation_source

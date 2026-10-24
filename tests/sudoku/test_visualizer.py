@@ -209,7 +209,14 @@ def test_long_reason_preserves_effects_and_active_assumption(solved_case, monkey
     visualizer.draw()
 
     rendered = [call.args[0] for call in body.render.call_args_list]
-    assert "…" in rendered
+    assert "…" not in rendered
+    assert any(details.assumption in text for text in rendered)
+    visualizer._scroll_details(10_000)
+    body.render.reset_mock()
+
+    visualizer.draw()
+
+    rendered = [call.args[0] for call in body.render.call_args_list]
     assert "R1C3: 5" in rendered
     assert any(details.assumption in text for text in rendered)
 

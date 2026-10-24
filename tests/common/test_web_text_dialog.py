@@ -60,6 +60,14 @@ class FakeDocument:
         self.activeElement: FakeElement | None = None
         self.canvas = FakeElement(self, "canvas")
         self.body.appendChild(self.canvas)
+        self.defaultView = self
+        self.listeners = {}
+
+    def addEventListener(self, name, callback, capture):
+        self.listeners[name] = callback
+
+    def removeEventListener(self, name, callback, capture):
+        self.listeners.pop(name)
 
     def createElement(self, tag_name: str) -> FakeElement:
         return FakeElement(self, tag_name)
@@ -80,6 +88,11 @@ class FakeDocument:
 def document(monkeypatch: pytest.MonkeyPatch) -> FakeDocument:
     fake = FakeDocument()
     monkeypatch.setattr(web_text_dialog, "_browser_document", lambda: fake)
+    monkeypatch.setattr(
+        web_text_dialog,
+        "_browser_event_proxy",
+        lambda callback: SimpleNamespace(destroy=lambda: None),
+    )
     return fake
 
 

@@ -14,6 +14,17 @@ def browser_window():  # noqa: ANN202
     return window
 
 
+def browser_viewport() -> tuple[int, int] | None:
+    if sys.platform != "emscripten":
+        return None
+    try:
+        window = browser_window()
+        width, height = int(window.innerWidth), int(window.innerHeight)
+        return (width, height) if width > 0 and height > 0 else None
+    except AttributeError, ImportError, TypeError, ValueError:
+        return None
+
+
 async def next_frame(clock: pygame.time.Clock) -> float:
     """Pace one frame, yield to the host event loop, and return elapsed seconds."""
 

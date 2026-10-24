@@ -9,6 +9,7 @@ from .runtime import browser_window
 _OVERLAY_ID = "puzzle-text-dialog-overlay"
 _TEXTAREA_ID = "puzzle-text-dialog-textarea"
 _ERROR_ID = "puzzle-text-dialog-error"
+_KEYBOARD_EVENTS = ("keydown", "keypress", "keyup")
 
 
 class WebTextDialogError(RuntimeError):
@@ -38,6 +39,12 @@ def _browser_document():  # noqa: ANN202
         ) from exc
 
 
+def _browser_event_proxy(callback):  # noqa: ANN202
+    from pyodide.ffi import create_proxy
+
+    return create_proxy(callback)
+
+
 class WebTextDialog:
     """Own a temporary DOM overlay and expose its action through polling."""
 
@@ -53,6 +60,9 @@ class WebTextDialog:
         self._overlay = None
         self._textarea = None
         self._error = None
+        self._focusable = []
+        self._keyboard_target = None
+        self._keyboard_proxy = None
         try:
             self._build(
                 title=title,
@@ -137,6 +147,7 @@ class WebTextDialog:
         if not editable:
             textarea.setAttribute("readonly", "")
         card.appendChild(textarea)
+        self._focusable.append(textarea)
 
         error = self._document.createElement("p")
         self._error = error
@@ -160,6 +171,10 @@ class WebTextDialog:
 
         overlay.appendChild(card)
         self._document.body.appendChild(overlay)
+        self._keyboard_target = self._document.defaultView
+        self._keyboard_proxy = _browser_event_proxy(self._handle_keyboard_event)
+        for name in _KEYBOARD_EVENTS:
+            self._keyboard_target.addEventListener(name, self._keyboard_proxy, True)
         textarea.focus()
         if not editable:
             textarea.select()
@@ -167,6 +182,7 @@ class WebTextDialog:
     def _button(self, label: str, action: str, *, primary: bool = False):  # noqa: ANN202
         button = self._document.createElement("button")
         button.type = "button"
+        button.dataset.action = action
         button.textContent = label
         background = "#1e3a8a" if primary else "#f8fafc"
         color = "#fff" if primary else "#172554"
@@ -179,7 +195,32 @@ class WebTextDialog:
             "onclick",
             f"document.getElementById('{_OVERLAY_ID}').dataset.action='{action}'",
         )
+        self._focusable.append(button)
         return button
+
+    def _handle_keyboard_event(self, event) -> None:
+        # Keep modal keys out of SDL while preserving native text editing.
+        event.stopImmediatePropagation()
+        if event.isComposing:
+            return
+        key = str(event.key)
+        button = event.target in self._focusable[1:]
+        if key not in ("Tab", "Escape") and not (button and key in ("Enter", " ")):
+            return
+        event.preventDefault()
+        if event.type != "keydown":
+            return
+        if key == "Tab":
+            try:
+                index = self._focusable.index(self._document.activeElement)
+            except ValueError:
+                index = 0 if event.shiftKey else -1
+            step = -1 if event.shiftKey else 1
+            self._focusable[(index + step) % len(self._focusable)].focus()
+        elif key == "Escape":
+            self._overlay.dataset.action = "cancel"
+        else:
+            self._overlay.dataset.action = event.target.dataset.action
 
     def poll(self) -> WebTextDialogResult | None:
         """Return one submit/cancel action without closing a submitted dialog."""
@@ -227,6 +268,7 @@ class WebTextDialog:
         if overlay is None:
             return
         try:
+            self._remove_keyboard_handlers()
             overlay.remove()
         except Exception as exc:
             raise WebTextDialogError(
@@ -236,7 +278,18 @@ class WebTextDialog:
             self._overlay = None
             self._textarea = None
             self._error = None
+            self._focusable = []
             self._focus_canvas()
+
+    def _remove_keyboard_handlers(self) -> None:
+        proxy = self._keyboard_proxy
+        if proxy is None:
+            return
+        for name in _KEYBOARD_EVENTS:
+            self._keyboard_target.removeEventListener(name, proxy, True)
+        proxy.destroy()
+        self._keyboard_proxy = None
+        self._keyboard_target = None
 
     def _focus_canvas(self) -> None:
         with suppress(Exception):
@@ -245,10 +298,13 @@ class WebTextDialog:
                 canvas.focus()
 
     def _remove_partial_overlay(self) -> None:
+        with suppress(Exception):
+            self._remove_keyboard_handlers()
         overlay = self._overlay
         self._overlay = None
         self._textarea = None
         self._error = None
+        self._focusable = []
         if overlay is None:
             return
         with suppress(Exception):

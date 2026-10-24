@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from itertools import combinations
 
+from puzzle_common.constraints import has_distinct_representatives
+
 from .model import Cell, Puzzle
 
 
@@ -113,7 +115,7 @@ class LogicSnapshot:
         return self.contradiction_message() is not None
 
     def contradiction_message(self) -> str | None:
-        """Report the first cat conflict or empty exact-one unit."""
+        """Report conflicts, empty units, or impossible region-to-line matching."""
 
         for first, second in combinations(sorted(self.cats), 2):
             if second in self.puzzle.conflicts[first]:
@@ -127,12 +129,40 @@ class LogicSnapshot:
             ("열", self.puzzle.cols),
             ("색상 영역", self.puzzle.regions),
         )
+        pending_single = False
         for name, units in named_groups:
             for index, unit in enumerate(units):
-                if not self.cats_in(unit) and not self.candidates_for(unit):
+                if self.cats_in(unit):
+                    continue
+                candidates = self.candidates_for(unit)
+                if not candidates:
                     if name == "색상 영역":
                         return "표시된 색상 영역에 고양이를 놓을 칸이 없습니다."
                     return f"{name} {index + 1}에 가능한 칸이 없습니다."
+                pending_single |= len(candidates) == 1
+
+        # Preserve direct deductions in the trace before testing remaining domains.
+        if pending_single or any(
+            self.is_possible(cell)
+            for cat in self.cats
+            for cell in self.puzzle.conflicts[cat]
+        ):
+            return None
+        active_regions = tuple(
+            self.candidates_for(region)
+            for region in self.puzzle.regions
+            if not self.cats_in(region)
+        )
+        for axis, name in enumerate(("행", "열")):
+            occupied = {cell[axis] for cell in self.cats}
+            domains = tuple(
+                sum(1 << index for index in {cell[axis] for cell in region} - occupied)
+                for region in active_regions
+            )
+            if not has_distinct_representatives(domains):
+                return (
+                    f"남은 색상 영역의 고양이들을 서로 다른 {name}에 놓을 수 없습니다."
+                )
         return None
 
     def is_solved(self) -> bool:

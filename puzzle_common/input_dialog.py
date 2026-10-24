@@ -6,7 +6,8 @@ import pygame
 
 from .board import draw_board
 from .clipboard import ClipboardError, copy_text, paste_text
-from .layout import BOARD_AREA, GRID_START_Y, MARGIN, get_board_layout
+from .drafts import save_draft
+from .layout import TOUCH_GAP, TOUCH_SIZE, get_board_layout
 from .puzzle import PuzzleDefinition
 from .runtime import next_frame
 from .ui_components import Button, draw_panel
@@ -61,7 +62,7 @@ class InputDialog:
         self._update_grid_layout(len(self.draft))
         self.dialog_width = self.layout.window_size[0]
         self.screen = configure_display(self.layout.window_size, self.title)
-        self.fonts: Fonts = get_fonts()
+        self.fonts: Fonts = get_fonts(number_size=self.layout.number_font_size)
         self.preset_names = tuple(definition.presets)
         self.panel_x = self.layout.panel_rect.x
         self.panel_width = self.layout.panel_rect.width
@@ -75,6 +76,8 @@ class InputDialog:
         self._replace_size_on_digit = False
         self._dragging = False
         self._drag_value: int | str | None = definition.empty
+        self.selected_symbol: int | str | None = definition.empty
+        self._symbol_selected = False
         self.validation_error = initial_error
         self.notice_message: str | None = None
         self._web_text_dialog: WebTextDialog | None = None
@@ -83,10 +86,39 @@ class InputDialog:
 
     def _update_grid_layout(self, board_size: int) -> None:
         self.layout = get_board_layout(board_size)
+        if self.layout.stacked:
+            columns = max(
+                1,
+                (self.layout.panel_rect.width - 36 + TOUCH_GAP)
+                // (TOUCH_SIZE + TOUCH_GAP),
+            )
+            rows = (len(self.definition.symbols) + 1 + columns - 1) // columns
+            self.layout = get_board_layout(
+                board_size,
+                panel_height=self.layout.panel_rect.height
+                + 32
+                + rows * (TOUCH_SIZE + TOUCH_GAP),
+            )
         self.board_size = board_size
         self.cell_size = self.layout.cell_size
         self.grid_width = self.layout.board_rect.width
         self.grid_start_x, self.grid_start_y = self.layout.board_rect.topleft
+
+    def _refresh_layout(self) -> bool:
+        previous = self.layout
+        self._update_grid_layout(self.board_size)
+        if self.layout == previous:
+            return False
+        self.dialog_width = self.layout.window_size[0]
+        self.screen = configure_display(self.layout.window_size, self.title)
+        self.fonts = get_fonts(number_size=self.layout.number_font_size)
+        self.panel_x = self.layout.panel_rect.x
+        self.panel_width = self.layout.panel_rect.width
+        self.panel_inner_x = self.panel_x + _PANEL_PADDING
+        self.panel_inner_width = self.panel_width - 2 * _PANEL_PADDING
+        self._dragging = False
+        self._init_buttons()
+        return True
 
     def _button(
         self, rect: pygame.Rect, label: str, *, primary: bool = False
@@ -104,6 +136,7 @@ class InputDialog:
         )
 
     def _init_buttons(self) -> None:
+        self.button_height = TOUCH_SIZE if self.layout.stacked else _BUTTON_HEIGHT
         gap = _BUTTON_SPACING
         columns = max(1, min(3, len(self.preset_names)))
         width = (self.panel_inner_width - (columns - 1) * gap) // columns
@@ -111,9 +144,11 @@ class InputDialog:
             self._button(
                 pygame.Rect(
                     self.panel_inner_x + (index % columns) * (width + gap),
-                    GRID_START_Y + 42 + (index // columns) * (_BUTTON_HEIGHT + gap),
+                    self.layout.panel_rect.top
+                    + 42
+                    + (index // columns) * (self.button_height + gap),
                     width,
-                    _BUTTON_HEIGHT,
+                    self.button_height,
                 ),
                 name,
             )
@@ -122,9 +157,36 @@ class InputDialog:
         preset_bottom = (
             self.preset_buttons[-1].rect.bottom
             if self.preset_buttons
-            else GRID_START_Y + 42
+            else self.layout.panel_rect.top + 42
         )
         action_y = self._init_editor_controls(preset_bottom + 18)
+        self.symbol_buttons: list[tuple[int | str | None, Button]] = []
+        if self.layout.stacked:
+            self.symbol_heading_y = action_y
+            action_y += 28
+            columns = max(
+                1, (self.panel_inner_width + TOUCH_GAP) // (TOUCH_SIZE + TOUCH_GAP)
+            )
+            width = (self.panel_inner_width - (columns - 1) * TOUCH_GAP) // columns
+            for index, value in enumerate(
+                (*self.definition.symbols, self.definition.empty)
+            ):
+                rect = pygame.Rect(
+                    self.panel_inner_x + (index % columns) * (width + TOUCH_GAP),
+                    action_y + (index // columns) * (TOUCH_SIZE + TOUCH_GAP),
+                    width,
+                    TOUCH_SIZE,
+                )
+                self.symbol_buttons.append(
+                    (
+                        value,
+                        self._button(
+                            rect,
+                            "삭제" if value == self.definition.empty else str(value),
+                        ),
+                    )
+                )
+            action_y = self.symbol_buttons[-1][1].rect.bottom + 18
         width = (self.panel_inner_width - gap) // 2
         labels = (
             ("프롬프트 보기", "JSON 입력")
@@ -137,7 +199,7 @@ class InputDialog:
                     self.panel_inner_x + index * (width + gap),
                     action_y,
                     width,
-                    _BUTTON_HEIGHT,
+                    self.button_height,
                 ),
                 label,
             )
@@ -146,24 +208,31 @@ class InputDialog:
         self.start_button = self._button(
             pygame.Rect(
                 self.panel_inner_x,
-                action_y + _BUTTON_HEIGHT + 18,
+                action_y + self.button_height + 18,
                 self.panel_inner_width,
-                _BUTTON_HEIGHT + 6,
+                self.button_height + 6,
             ),
             "풀이 시작",
             primary=True,
         )
 
     def _init_editor_controls(self, y: int) -> int:
-        self.size_field_rect = pygame.Rect(self.panel_inner_x + 52, y, 58, 40)
+        self.size_field_rect = pygame.Rect(
+            self.panel_inner_x + 52, y, 58, self.button_height
+        )
         variable_size = self.definition.size_range[0] != self.definition.size_range[1]
         x = self.size_field_rect.right + 9 if variable_size else self.panel_inner_x
         self.new_grid_button = self._button(
-            pygame.Rect(x, y, self.panel_inner_x + self.panel_inner_width - x, 40),
+            pygame.Rect(
+                x,
+                y,
+                self.panel_inner_x + self.panel_inner_width - x,
+                self.button_height,
+            ),
             "빈 격자 만들기",
         )
         self.editor_buttons = [self.new_grid_button]
-        return y + _BUTTON_HEIGHT + 18
+        return y + self.button_height + 18
 
     def _show_error(self, message: str) -> None:
         self.validation_error = message
@@ -181,9 +250,7 @@ class InputDialog:
         self.screen.fill(APP_BACKGROUND)
         title = self.fonts.title.render(self.title, True, PRIMARY_DARK)
         self.screen.blit(title, title.get_rect(center=(self.dialog_width // 2, 35)))
-        draw_panel(
-            self.screen, pygame.Rect(MARGIN, GRID_START_Y, BOARD_AREA, BOARD_AREA)
-        )
+        draw_panel(self.screen, self.layout.board_rect)
         draw_board(
             self.screen,
             self.layout,
@@ -201,7 +268,7 @@ class InputDialog:
         )
         self.screen.blit(
             self.fonts.heading.render("예제 문제", True, BLACK),
-            (self.panel_inner_x, GRID_START_Y + 14),
+            (self.panel_inner_x, self.layout.panel_rect.top + 14),
         )
         if self.progress_text:
             progress = self.fonts.info.render(self.progress_text, True, GRAY)
@@ -210,7 +277,7 @@ class InputDialog:
                 progress.get_rect(
                     topright=(
                         self.panel_inner_x + self.panel_inner_width,
-                        GRID_START_Y + 19,
+                        self.layout.panel_rect.top + 19,
                     )
                 ),
             )
@@ -222,6 +289,19 @@ class InputDialog:
             self.start_button,
         ):
             button.draw(self.screen)
+        if self.symbol_buttons:
+            self.screen.blit(
+                self.fonts.info.render(
+                    "입력할 값 · 선택 후 칸을 터치하세요", True, GRAY
+                ),
+                (self.panel_inner_x, self.symbol_heading_y),
+            )
+            for value, button in self.symbol_buttons:
+                button.draw(self.screen)
+                if self._symbol_selected and value == self.selected_symbol:
+                    pygame.draw.rect(
+                        self.screen, ACCENT, button.rect, width=3, border_radius=10
+                    )
         self._draw_editor_controls()
         self._draw_instructions()
         self._draw_message()
@@ -352,6 +432,13 @@ class InputDialog:
     def _handle_editor_click(self, position: tuple[int, int]) -> bool:
         self.size_focused = False
         self._dragging = False
+        for value, button in self.symbol_buttons:
+            if button.is_clicked(position):
+                self.selected_symbol = value
+                self._symbol_selected = True
+                if self.selected_cell is not None:
+                    self._set_cell(self.selected_cell, value)
+                return True
         if self.new_grid_button.is_clicked(position):
             self._apply_size()
             return True
@@ -364,6 +451,8 @@ class InputDialog:
         cell = self.layout.cell_at(position)
         if cell is not None:
             self.selected_cell = cell
+            if self._symbol_selected:
+                self._set_cell(cell, self.selected_symbol)
             self._drag_value = self.draft[cell[0]][cell[1]]
             self._dragging = self._drag_value != self.definition.empty
             return True
@@ -441,11 +530,14 @@ class InputDialog:
         rows = [list(row) for row in self.draft]
         rows[row][column] = value
         self.draft = self.definition.normalize(rows)
+        save_draft(self.definition, self.draft)
         self._clear_message()
 
     def _replace_draft(self, grid: object, notice: str) -> None:
         draft: Grid = self.definition.normalize(grid)
-        self._update_grid_layout(len(draft))
+        changed = draft != self.draft
+        self.board_size = len(draft)
+        self._refresh_layout()
         self.draft = draft
         self.selected_cell = None
         self.size_text = str(len(draft))
@@ -453,6 +545,8 @@ class InputDialog:
         self._replace_size_on_digit = False
         self._dragging = False
         self._drag_value = self.definition.empty
+        if changed:
+            save_draft(self.definition, self.draft)
         self._show_notice(notice)
 
     def _apply_size(self) -> None:
@@ -616,12 +710,13 @@ class InputDialog:
             self.draw()
             while self.running:
                 await next_frame(clock)
+                layout_changed = self._refresh_layout()
                 events = pygame.event.get()
                 result = self._handle_events(events)
                 if result is not None:
                     return result
                 dialog_changed = self.running and self._poll_web_text_dialog()
-                if self.running and (events or dialog_changed):
+                if self.running and (events or dialog_changed or layout_changed):
                     self.draw()
             return None
         finally:

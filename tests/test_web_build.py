@@ -37,19 +37,14 @@ def test_staging_contains_both_puzzles_and_shared_assets_once(monkeypatch, tmp_p
         cache.mkdir()
         (cache / "module.pyc").write_bytes(b"cache")
         (project / name / "module.pyo").write_bytes(b"cache")
-    stage = project / "build/puzzle-solvers"
-    stage.mkdir(parents=True)
-    (stage / "stale.py").write_text("old")
     sibling = project / "build/unrelated"
-    sibling.mkdir()
+    sibling.mkdir(parents=True)
     (sibling / "keep.txt").write_text("keep")
 
-    assert build_web.stage_runtime_files() == stage
-    files = {
-        path.relative_to(stage).as_posix()
-        for path in stage.rglob("*")
-        if path.is_file()
-    }
+    build_web.build_web()
+    with ZipFile(project / "build/web/runtime.zip") as archive:
+        files = set(archive.namelist())
+        assert archive.read("main.py") == (project / "main.py").read_bytes()
     assert files == {
         "main.py",
         "meow/__init__.py",
@@ -62,24 +57,8 @@ def test_staging_contains_both_puzzles_and_shared_assets_once(monkeypatch, tmp_p
         "puzzle_common/assets/fonts/Pretendard-SemiBold.otf",
         "puzzle_common/assets/fonts/OFL-Pretendard.txt",
     }
-    assert (stage / "main.py").read_bytes() == (project / "main.py").read_bytes()
+    assert {path.name for path in sibling.parent.iterdir()} == {"web", "unrelated"}
     assert (sibling / "keep.txt").is_file()
-
-
-@pytest.mark.parametrize("missing", ("main.py", "meow", "sudoku", "puzzle_common"))
-def test_invalid_runtime_preserves_previous_stage(monkeypatch, tmp_path, missing):
-    project = _configure_fake_project(monkeypatch, tmp_path)
-    target = project / missing
-    if target.is_dir():
-        shutil.rmtree(target)
-    else:
-        target.unlink()
-    stage = project / "build/puzzle-solvers"
-    stage.mkdir(parents=True)
-    (stage / "keep.txt").write_text("keep")
-    with pytest.raises(FileNotFoundError):
-        build_web.stage_runtime_files()
-    assert (stage / "keep.txt").is_file()
 
 
 def test_build_publishes_one_pyscript_bundle_with_compatibility_redirects(
@@ -165,12 +144,12 @@ def test_cleanup_rejects_symlink_to_external_files(monkeypatch, tmp_path):
     outside = tmp_path / "outside"
     outside.mkdir()
     (outside / "keep.txt").write_text("keep")
-    stage = project / "build/puzzle-solvers"
-    stage.parent.mkdir()
+    web = project / "build/web"
+    web.parent.mkdir()
     try:
-        stage.symlink_to(outside, target_is_directory=True)
+        web.symlink_to(outside, target_is_directory=True)
     except OSError:
         pytest.skip("Creating symlinks is unavailable on this system")
     with pytest.raises(RuntimeError):
-        build_web._clear_build_directory(stage)
+        build_web._clear_build_directory(web)
     assert (outside / "keep.txt").is_file()

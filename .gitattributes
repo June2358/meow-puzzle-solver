@@ -1,1 +1,3 @@
+# SCM syntax highlighting & preventing 3-way merges
+uv.lock merge=binary linguist-language=TOML linguist-generated=true
 *.cmd text eol=crlf

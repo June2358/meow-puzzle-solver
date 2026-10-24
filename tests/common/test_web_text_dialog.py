@@ -7,8 +7,8 @@ import pytest
 
 import puzzle_common.input_dialog as common_input
 import puzzle_common.web_text_dialog as web_text_dialog
-from meow.input_dialog import MeowInputDialog
-from sudoku.input_dialog import SudokuInputDialog
+from meow.definition import DEFINITION as MEOW
+from sudoku.definition import DEFINITION as SUDOKU
 
 
 class FakeElement:
@@ -98,14 +98,14 @@ def document(monkeypatch: pytest.MonkeyPatch) -> FakeDocument:
 @pytest.fixture(
     params=[
         (
-            MeowInputDialog,
+            MEOW,
             {"regions": [["A", "A", "B"], ["C", "B", "B"], ["C", "C", "B"]]},
-            "복사한 N×N 영역 JSON을 아래 칸에 붙여넣고 불러오기를 누르세요.",
+            "복사한 퍼즐 JSON을 붙여넣고 불러오기를 누르세요.",
         ),
         (
-            SudokuInputDialog,
+            SUDOKU,
             [[0] * 9 for _ in range(9)],
-            "복사한 9×9 JSON을 아래 칸에 붙여넣고 불러오기를 누르세요.",
+            "복사한 퍼즐 JSON을 붙여넣고 불러오기를 누르세요.",
         ),
     ],
     ids=["meow", "sudoku"],
@@ -118,7 +118,7 @@ def editor_case(request):
 def input_screen(document, monkeypatch, editor_case):
     pygame.init()
     monkeypatch.setattr(common_input, "is_web_runtime", lambda: True)
-    screen = editor_case[0]()
+    screen = common_input.InputDialog(editor_case[0])
     yield screen
     screen._close_web_text_dialog()
     pygame.quit()

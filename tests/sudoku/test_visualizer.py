@@ -11,14 +11,15 @@ from puzzle_common.playback import (
     _AUTOPLAY_INTERVAL,
     _NAVIGATION_REPEAT_DELAY,
     _NAVIGATION_REPEAT_INTERVAL,
+    PlaybackScreen,
 )
 from puzzle_common.presentation import FrameKind
-from puzzle_common.ui_style import ACCENT_YELLOW, ORANGE, RED, WHITE, wrap_text
+from puzzle_common.ui_style import ACCENT_YELLOW, ORANGE, RED, wrap_text
 from sudoku.board import Puzzle
+from sudoku.definition import DEFINITION
 from sudoku.puzzle_catalog import load_puzzle_catalog
-from sudoku.solve_types import Assignment
+from sudoku.solve_types import Assignment, Elimination, Technique, TechniqueResult
 from sudoku.solver import SudokuSolver
-from sudoku.visualizer import SudokuVisualizer
 
 
 @pytest.fixture(scope="module")
@@ -37,7 +38,7 @@ def pygame_display() -> None:
 def test_visualizer_draws_a_solved_result(
     solved_case: tuple[Puzzle, SolveResult],
 ) -> None:
-    visualizer = SudokuVisualizer(*solved_case)
+    visualizer = PlaybackScreen(DEFINITION, *solved_case)
 
     assert visualizer.screen.get_size() == (1010, 700)
     visualizer.draw()
@@ -48,7 +49,7 @@ def test_visualizer_can_render_a_normalized_unsolvable_trace() -> None:
     grid[0][0], grid[0][7], grid[2][0] = 1, 0, 0
     puzzle = Puzzle(grid)
     data = SudokuSolver(puzzle).solve()
-    visualizer = SudokuVisualizer(puzzle, data)
+    visualizer = PlaybackScreen(DEFINITION, puzzle, data)
 
     visualizer._set_index(visualizer.frame_count - 1)
     visualizer.draw()
@@ -60,7 +61,7 @@ def test_visualizer_can_render_a_normalized_unsolvable_trace() -> None:
 def test_visualizer_navigation_stays_within_the_trace(
     solved_case: tuple[Puzzle, SolveResult],
 ) -> None:
-    visualizer = SudokuVisualizer(*solved_case)
+    visualizer = PlaybackScreen(DEFINITION, *solved_case)
 
     assert not visualizer._navigate(-1)
     assert visualizer._navigate(1)
@@ -71,7 +72,7 @@ def test_visualizer_navigation_stays_within_the_trace(
 
 def test_presentation_keeps_assumption_reason_and_structured_effects() -> None:
     puzzle = Puzzle(load_puzzle_catalog()["극한"])
-    visualizer = SudokuVisualizer(puzzle, SudokuSolver(puzzle).solve())
+    visualizer = PlaybackScreen(DEFINITION, puzzle, SudokuSolver(puzzle).solve())
     visualizer.current_step_index = next(
         index
         for index, frame in enumerate(visualizer.frames)
@@ -98,7 +99,7 @@ def test_multiple_solution_warning_and_last_digit_label() -> None:
     for row, col in ((0, 3), (0, 4), (3, 3), (3, 4)):
         grid[row][col] = 0
     puzzle = Puzzle(grid)
-    visualizer = SudokuVisualizer(puzzle, SudokuSolver(puzzle).solve())
+    visualizer = PlaybackScreen(DEFINITION, puzzle, SudokuSolver(puzzle).solve())
 
     assert "복수해" in visualizer._status_badge()[0]
     visualizer.current_step_index = next(
@@ -118,7 +119,7 @@ def test_multiple_solution_reason_remains_visible_during_assumption(kind) -> Non
     for row, col in ((0, 3), (0, 4), (3, 3), (3, 4)):
         grid[row][col] = 0
     puzzle = Puzzle(grid)
-    visualizer = SudokuVisualizer(puzzle, SudokuSolver(puzzle).solve())
+    visualizer = PlaybackScreen(DEFINITION, puzzle, SudokuSolver(puzzle).solve())
     visualizer.current_step_index = next(
         index
         for index, frame in enumerate(visualizer.frames)
@@ -147,10 +148,20 @@ def test_multiple_solution_reason_remains_visible_during_assumption(kind) -> Non
 def test_removed_candidate_has_a_red_strike(
     solved_case: tuple[Puzzle, SolveResult],
 ) -> None:
-    visualizer = SudokuVisualizer(*solved_case)
+    visualizer = PlaybackScreen(DEFINITION, *solved_case)
     visualizer.screen.fill((255, 255, 255))
 
-    visualizer._draw_candidate_marks(0, 2, frozenset({1}), frozenset({5}))
+    frame = replace(
+        visualizer.current_frame,
+        deduction=TechniqueResult(
+            Technique.NAKED_PAIR,
+            eliminations=(Elimination((0, 2), frozenset({5})),),
+        ),
+    )
+    view = DEFINITION.frame_view(visualizer.puzzle, frame)
+    mark = next(mark for mark in view.cells[0][2].marks if mark.text == "5")
+    assert mark.slot == 4 and mark.struck and mark.color == RED
+    visualizer._draw_board(frame)
 
     center = visualizer.layout.cell_rect((0, 2)).center
     assert tuple(visualizer.screen.get_at((center[0] - 4, center[1]))[:3]) == (
@@ -162,7 +173,7 @@ def test_removed_candidate_has_a_red_strike(
 
 def test_restore_explains_the_failed_attempt_without_orange_highlighting() -> None:
     puzzle = Puzzle(load_puzzle_catalog()["극한"])
-    visualizer = SudokuVisualizer(puzzle, SudokuSolver(puzzle).solve())
+    visualizer = PlaybackScreen(DEFINITION, puzzle, SudokuSolver(puzzle).solve())
     frame = next(
         frame for frame in visualizer.frames if frame.kind is FrameKind.RESTORE
     )
@@ -183,7 +194,7 @@ def test_restore_explains_the_failed_attempt_without_orange_highlighting() -> No
 
 def test_new_logic_and_selection_stages_have_specific_reasons() -> None:
     puzzle = Puzzle(load_puzzle_catalog()["극한"])
-    visualizer = SudokuVisualizer(puzzle, SudokuSolver(puzzle).solve())
+    visualizer = PlaybackScreen(DEFINITION, puzzle, SudokuSolver(puzzle).solve())
     logic_end = next(
         frame for frame in visualizer.frames if frame.kind is FrameKind.LOGIC_END
     )
@@ -203,7 +214,7 @@ def test_new_logic_and_selection_stages_have_specific_reasons() -> None:
 
 def test_refutation_keeps_red_fill_but_has_no_active_assumption() -> None:
     puzzle = Puzzle(load_puzzle_catalog()["전문가"])
-    visualizer = SudokuVisualizer(puzzle, SudokuSolver(puzzle).solve())
+    visualizer = PlaybackScreen(DEFINITION, puzzle, SudokuSolver(puzzle).solve())
     frame = next(
         frame for frame in visualizer.frames if frame.kind is FrameKind.REFUTATION
     )
@@ -216,16 +227,33 @@ def test_refutation_keeps_red_fill_but_has_no_active_assumption() -> None:
     assert ("한 단계 가정 중", ORANGE) not in details.annotations
     visualizer._draw_board(frame)
 
-    expected = pygame.Surface((1, 1))
-    expected.fill(WHITE)
-    for color, alpha in ((ACCENT_YELLOW, 70), (RED, 65), (RED, 80)):
-        overlay = pygame.Surface((1, 1), pygame.SRCALPHA)
-        overlay.fill((*color, alpha))
-        expected.blit(overlay, (0, 0))
-    rect = visualizer.layout.cell_rect(frame.assumption.cell)
-    assert visualizer.screen.get_at((rect.left + 3, rect.top + 3)) == expected.get_at(
-        (0, 0)
+    view = DEFINITION.frame_view(puzzle, frame)
+    row, column = frame.assumption.cell
+    cell = view.cells[row][column]
+    assert cell.highlights == ((*ACCENT_YELLOW, 70), (*RED, 65), (*RED, 80))
+    assert cell.outline is None
+
+
+def test_long_reason_preserves_effects_and_active_assumption(solved_case):
+    puzzle, result = solved_case
+    frame = PlaybackScreen(DEFINITION, puzzle, result).current_frame
+    details = replace(
+        DEFINITION.describe(frame, result),
+        reason="표시된 칸에 가능한 후보가 하나뿐입니다. " * 100,
+        effects=(("후보 제거 · 1", ("R1C3: 5",)),),
+        assumption="R1C3 = 1",
     )
+    definition = replace(DEFINITION, describe=lambda frame, result: details)
+    visualizer = PlaybackScreen(definition, puzzle, result)
+    body = Mock(wraps=visualizer.fonts.body)
+    visualizer.fonts = replace(visualizer.fonts, body=body)
+
+    visualizer.draw()
+
+    rendered = [call.args[0] for call in body.render.call_args_list]
+    assert "…" in rendered
+    assert "R1C3: 5" in rendered
+    assert any(details.assumption in text for text in rendered)
 
 
 @pytest.mark.parametrize("snapshot", (None, "foreign", ((), ()), ((0,) * 9, (0,) * 9)))
@@ -241,13 +269,13 @@ def test_visualizer_rejects_foreign_snapshots_before_configuring_display(
 
     monkeypatch.setattr("puzzle_common.playback.configure_display", forbidden_display)
     with pytest.raises(TypeError, match="grid/candidates"):
-        SudokuVisualizer(puzzle, foreign)
+        PlaybackScreen(DEFINITION, puzzle, foreign)
 
 
 def test_held_arrow_key_repeats_and_stops_on_release(
     solved_case: tuple[Puzzle, SolveResult],
 ) -> None:
-    visualizer = SudokuVisualizer(*solved_case)
+    visualizer = PlaybackScreen(DEFINITION, *solved_case)
     visualizer._set_index(1)
 
     pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RIGHT))
@@ -271,7 +299,7 @@ def test_held_arrow_key_repeats_and_stops_on_release(
 def test_home_end_and_autoplay_navigation(
     solved_case: tuple[Puzzle, SolveResult],
 ) -> None:
-    visualizer = SudokuVisualizer(*solved_case)
+    visualizer = PlaybackScreen(DEFINITION, *solved_case)
 
     pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_END))
     visualizer._handle_events(pygame.event.get())
@@ -291,7 +319,7 @@ def test_run_yields_a_frame_then_handles_a_quit_event(
     solved_case: tuple[Puzzle, SolveResult],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    visualizer = SudokuVisualizer(*solved_case)
+    visualizer = PlaybackScreen(DEFINITION, *solved_case)
     draw_calls: list[None] = []
     frame_calls: list[pygame.time.Clock] = []
 

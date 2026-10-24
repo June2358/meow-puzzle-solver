@@ -61,7 +61,7 @@ def _load_bundled_font(path: Path, size: int) -> pygame.font.Font:
     return pygame.font.Font(str(path), size)
 
 
-def get_fonts(*, number_size: int, candidate_size: int) -> Fonts:
+def get_fonts(*, number_size: int = 36, candidate_size: int = 13) -> Fonts:
     """Create deterministic font roles shared by Desktop and Web."""
 
     if not pygame.font.get_init():

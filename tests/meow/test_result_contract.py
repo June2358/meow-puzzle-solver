@@ -44,6 +44,6 @@ def test_logic_returns_the_shared_run_without_conversion(monkeypatch):
 
 
 def test_app_uses_public_solver_directly():
-    from meow.app import PLUGIN
+    from meow.definition import DEFINITION
 
-    assert PLUGIN.solve is solve
+    assert DEFINITION.solve is solve

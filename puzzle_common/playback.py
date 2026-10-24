@@ -1,13 +1,14 @@
-"""One pygame playback screen; puzzle adapters interpret traces and draw boards."""
+"""One concrete playback screen consumes puzzle display data."""
 
 from collections.abc import Iterable
-from dataclasses import dataclass
 
 import pygame
 
+from .board import draw_board
 from .engine import Outcome, SolveResult
 from .layout import get_board_layout
 from .presentation import PlaybackFrame, build_frames
+from .puzzle import PuzzleDefinition
 from .runtime import next_frame
 from .ui_components import Button, draw_panel
 from .ui_style import (
@@ -24,26 +25,16 @@ from .ui_style import (
     RED,
     RED_LIGHT,
     Color,
-    Fonts,
     configure_display,
+    get_fonts,
     wrap_text,
 )
+from .view import Grid, PlaybackDetails
 
 _NAVIGATION_REPEAT_DELAY = 0.36
 _NAVIGATION_REPEAT_INTERVAL = 0.08
 _AUTOPLAY_INTERVAL = 0.9
 type _NavigationSource = tuple[str, int]
-type EffectGroups = tuple[tuple[str, tuple[str, ...]], ...]
-
-
-@dataclass(frozen=True, slots=True)
-class PlaybackDetails:
-    title: str
-    reason: str
-    effects: EffectGroups = ()
-    annotations: tuple[tuple[str, Color], ...] = ()
-    assumption: str = ""
-    region_colors: tuple[Color, ...] = ()
 
 
 def _pack_effect_items(
@@ -67,32 +58,34 @@ def _pack_effect_items(
     return tuple(lines)
 
 
-class PlaybackScreen[Draft, Snapshot, Deduction, Decision, Witness]:
+class PlaybackScreen:
     """Own presentation and playback controls without importing a puzzle type."""
 
     def __init__(
         self,
-        *,
-        result: SolveResult[Snapshot, Deduction, Decision, Witness],
-        edit_draft: Draft,
-        board_size: int,
-        caption: str,
-        fonts: Fonts,
+        definition: PuzzleDefinition,
+        puzzle: object,
+        result: SolveResult,
     ) -> None:
         if not isinstance(result, SolveResult):
             raise TypeError("풀이 결과는 SolveResult이어야 합니다.")
+        self.definition = definition
+        self.puzzle = puzzle
         self.result = result
         self._frames = build_frames(result)
-        self._validate_frames()
-        self._edit_draft = edit_draft
+        definition.validate_frames(puzzle, self.frames)
+        self._edit_draft = definition.grid(puzzle)
+        board_size = len(self._edit_draft)
         self._board_size = board_size
         self.layout = layout = get_board_layout(board_size)
         self.cell_size = layout.cell_size
         self.board_rect = layout.board_rect
         self.board_origin = self.board_rect.topleft
         self.panel_rect = layout.panel_rect
-        self.fonts = fonts
-        self.screen = configure_display(layout.window_size, caption)
+        self.fonts = get_fonts()
+        self.screen = configure_display(
+            layout.window_size, f"{definition.title} · 풀이 과정"
+        )
         self.current_step_index = 0
         self.running = True
         self.autoplay_enabled = False
@@ -129,7 +122,7 @@ class PlaybackScreen[Draft, Snapshot, Deduction, Decision, Witness]:
     @property
     def frames(
         self,
-    ) -> tuple[PlaybackFrame[Snapshot, Deduction, Decision, Witness], ...]:
+    ) -> tuple[PlaybackFrame, ...]:
         return self._frames
 
     @property
@@ -137,26 +130,21 @@ class PlaybackScreen[Draft, Snapshot, Deduction, Decision, Witness]:
         return len(self.frames)
 
     @property
-    def current_frame(self) -> PlaybackFrame[Snapshot, Deduction, Decision, Witness]:
+    def current_frame(self) -> PlaybackFrame:
         return self.frames[self.current_step_index]
 
     @property
     def outcome(self) -> Outcome:
         return self.result.outcome
 
-    def _validate_frames(self) -> None:
-        """Reject foreign native payloads before constructing the display."""
-        raise NotImplementedError
+    def _draw_board(self, frame: PlaybackFrame) -> None:
+        view = self.definition.frame_view(self.puzzle, frame)
+        if view.source is not frame.snapshot or view.size != self._board_size:
+            raise ValueError("보드 표시가 전달된 문제에 속하지 않습니다.")
+        draw_board(self.screen, self.layout, view, self.fonts)
 
-    def _draw_board(
-        self, frame: PlaybackFrame[Snapshot, Deduction, Decision, Witness]
-    ) -> None:
-        raise NotImplementedError
-
-    def _presentation(
-        self, frame: PlaybackFrame[Snapshot, Deduction, Decision, Witness]
-    ) -> PlaybackDetails:
-        raise NotImplementedError
+    def _presentation(self, frame: PlaybackFrame) -> PlaybackDetails:
+        return self.definition.describe(frame, self.result)
 
     def _status_badge(self) -> tuple[str, Color, Color]:
         if self.outcome is Outcome.MULTIPLE:
@@ -164,30 +152,6 @@ class PlaybackScreen[Draft, Snapshot, Deduction, Decision, Witness]:
         if self.outcome is Outcome.UNSOLVABLE:
             return "해 없음 · 유효한 배치 없음", RED, RED_LIGHT
         return "유일해", ACCENT, ACCENT_LIGHT
-
-    def _fill_cell(
-        self, cell: tuple[int, int], color: tuple[int, int, int, int]
-    ) -> None:
-        rect = self.layout.cell_rect(cell).inflate(-4, -4)
-        if rect.width <= 0 or rect.height <= 0:
-            return
-        surface = pygame.Surface(rect.size, pygame.SRCALPHA)
-        surface.fill(color)
-        self.screen.blit(surface, rect.topleft)
-
-    def _outline_cell(
-        self, cell: tuple[int, int], color: Color, width: int = 3
-    ) -> None:
-        rect = self.layout.cell_rect(cell).inflate(-4, -4)
-        if rect.width <= 0 or rect.height <= 0:
-            return
-        pygame.draw.rect(
-            self.screen,
-            color,
-            rect,
-            width=max(1, min(width, rect.width // 2)),
-            border_radius=max(0, min(5, rect.width // 5)),
-        )
 
     def _draw_coordinates(self) -> None:
         if self.cell_size < 18:
@@ -223,9 +187,7 @@ class PlaybackScreen[Draft, Snapshot, Deduction, Decision, Witness]:
         self._draw_panel(frame)
         pygame.display.flip()
 
-    def _draw_panel(
-        self, frame: PlaybackFrame[Snapshot, Deduction, Decision, Witness]
-    ) -> None:
+    def _draw_panel(self, frame: PlaybackFrame) -> None:
         draw_panel(self.screen, self.panel_rect)
         details = self._presentation(frame)
         x, y = self.panel_rect.left + 18, self.panel_rect.top + 18
@@ -505,11 +467,12 @@ class PlaybackScreen[Draft, Snapshot, Deduction, Decision, Witness]:
         return None
 
     def _handle_events(self, events: Iterable[pygame.event.Event]) -> str | None:
+        events = tuple(events)
+        if any(event.type == pygame.QUIT for event in events):
+            self._clear_navigation_holds()
+            self.running = False
+            return None
         for event in events:
-            if event.type == pygame.QUIT:
-                self._clear_navigation_holds()
-                self.running = False
-                return None
             if event.type == pygame.WINDOWFOCUSLOST:
                 self._clear_navigation_holds()
             elif event.type == pygame.KEYDOWN:
@@ -526,7 +489,7 @@ class PlaybackScreen[Draft, Snapshot, Deduction, Decision, Witness]:
                 self._end_navigation_hold(("mouse", event.button))
         return None
 
-    async def run(self) -> Draft | None:
+    async def run(self) -> Grid | None:
         clock = pygame.time.Clock()
         self.draw()
         while self.running:

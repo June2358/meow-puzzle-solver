@@ -1,33 +1,33 @@
 # Puzzle Solvers
 
-MEOW Queens와 Sudoku를 함께 관리하는 pygame-ce 프로젝트입니다.
-논리 추론·한 단계 가정·반증·재귀 탐색, 입력/재생 화면과 웹 빌드를 공유합니다.
-각 퍼즐은 같은 상태/규칙 계약으로 데이터와 고유 기법을 제공하고, 결과 설명과 보드 표현을 연결합니다.
+MEOW Queens와 Sudoku를 하나의 pygame-ce 앱에서 입력하고 풀고 재생합니다.
+앱 안에서 퍼즐을 선택하며 두 모드가 같은 편집기·보드 렌더러·재생기와 조작을 사용합니다.
+각 퍼즐의 규칙, 풀이 순서와 해 판정은 그대로 유지합니다.
 
 공식 통합 저장소: <https://github.com/June2358/puzzle-solvers>
 
 - [웹에서 퍼즐 선택](https://june2358.github.io/puzzle-solvers/)
-- [MEOW Queens 실행](https://june2358.github.io/puzzle-solvers/meow/)
-- [Sudoku 실행](https://june2358.github.io/puzzle-solvers/sudoku/)
+- [MEOW Queens로 시작](https://june2358.github.io/puzzle-solvers/meow/)
+- [Sudoku로 시작](https://june2358.github.io/puzzle-solvers/sudoku/)
 
-기존 `meow-puzzle-solver` 저장소를 이 이름으로 변경했으며,
-`simple-sudoku-solver`의 코드와 Git 이력을 함께 보존합니다.
-앞으로 두 퍼즐의 수정과 이슈는 이 저장소에서 관리합니다.
-
-## 개발 환경
+## 실행
 
 Python 3.12.15와 uv를 사용합니다.
 
 ```powershell
 uv sync --locked
-uv run python -m meow
-uv run python -m sudoku
+uv run python main.py
 ```
 
-Windows에서는 `run.cmd`를 실행하면 MEOW를 시작합니다.
-`run.cmd sudoku`로 Sudoku를 시작할 수 있습니다.
+`uv run python -m puzzle_common`도 같은 선택 화면을 엽니다.
+Windows에서는 `run.cmd`를 실행하세요. `run.cmd meow`, `run.cmd sudoku` 또는
+`uv run python -m meow`, `uv run python -m sudoku`는 해당 모드의 편집기로 시작합니다.
 
-검사:
+선택 화면에서는 마우스나 방향키·Tab·Enter를 사용합니다.
+편집기의 Esc는 퍼즐 선택으로, 재생기의 Esc 또는 편집 버튼은 원본 문제 편집으로 돌아갑니다.
+앱을 실행하는 동안 각 모드의 초안이 따로 유지됩니다. 창을 닫으면 앱이 종료됩니다.
+
+## 검사
 
 ```powershell
 uv run ruff check .
@@ -43,35 +43,27 @@ uv run python scripts/build_web.py
 uv run python -m http.server 8765 --directory build/web
 ```
 
-`http://localhost:8765/`에서 앱을 선택합니다. 각각 `/meow/`, `/sudoku/`에 있습니다.
-GitHub Actions는 `main` 갱신 시 두 앱을 빌드하고 `build/web`을 하나의 Pages 사이트로 배포합니다.
-Pull request에서도 두 앱의 웹 빌드를 검사하며, 배포는 `main`에서만 실행합니다.
+`http://localhost:8765/`에서 앱 안의 선택 화면을 엽니다.
+두 퍼즐과 공통 자산을 포함한 Pygbag 번들을 한 번 빌드하고 `build/web`에 배치합니다.
+기존 `/meow/`, `/sudoku/` 주소는 각각 `/?puzzle=meow`, `/?puzzle=sudoku`로 이동하며
+같은 앱에서 해당 모드로 시작합니다. 모드를 바꿀 때 페이지를 다시 불러오지 않습니다.
+
+GitHub Actions는 pull request에서 웹 빌드를 검사하고 `main` 갱신 시 같은 산출물을 Pages에 배포합니다.
 새 GitHub 저장소에서는 Settings → Pages → Source를 GitHub Actions로 선택합니다.
 
 ## 구조
 
-- `puzzle_common/engine.py`: 논리 고정점·가정·반증 재시작·상한 DFS, 불변 실행 기록과 공통 SolveResult
-- `meow/engine_adapter.py`, `sudoku/engine_adapter.py`: 같은 계약에 고유 기법·점수·가정/반증·MRV 규칙 제공
-- `meow/`, `sudoku/`: 퍼즐 모델·고유 검증과 공통 결과의 설명/보드 어댑터
-- `puzzle_common/input_dialog.py`: 입력 레이아웃·버튼·프리셋·메시지·JSON/클립보드·이벤트 루프
-- `puzzle_common/playback.py`: 풀이 패널·단계 이동·길게 누르기·자동 재생·이벤트 루프
-- `puzzle_common/app.py`, 각 앱의 `app.py`: `PuzzlePlugin` 등록과 하나의 시작·편집·풀이·재생·종료 흐름
-- `puzzle_common/presentation.py`: 원본 결과를 같은 FrameKind/PlaybackFrame 단계로 한 번 생성
-- 각 앱의 `presentation.py`: 같은 한 단계에 대한 고유 문구·효과·설명만 제공
-- `puzzle_common/layout.py`: 양쪽 입력/재생의 같은 창·보드·패널 배치
-- `puzzle_common/`: 그 외 공통 폰트·그리기·좌표·클립보드·브라우저 입력·프리셋 파일 읽기
-- `main_meow.py`, `main_sudoku.py`: 웹 빌드용 진입점
-- `scripts/build_web.py`: 두 앱을 별도 번들로 빌드하고 선택 페이지 생성
-- `tests/common/`, `tests/meow/`, `tests/sudoku/`: 공통 엔진/계약과 퍼즐별 회귀 검사
+- `main.py`, `puzzle_common/__main__.py`: 하나의 앱 진입점
+- `puzzle_common/app.py`: 명시적 퍼즐 등록, 선택 → 편집 → 풀이 → 재생과 초안 보존
+- `puzzle_common/puzzle.py`, `view.py`: 퍼즐 정의와 불변 표시 데이터 계약
+- `puzzle_common/input_dialog.py`, `board.py`, `playback.py`: 공통 편집기·렌더러·재생기
+- `puzzle_common/engine.py`: 논리 고정점·가정·반증·탐색과 불변 실행 기록, 공통 SolveResult
+- `puzzle_common/presentation.py`: 원본 실행 기록을 공통 PlaybackFrame 단계로 변환
+- `meow/definition.py`, `sudoku/definition.py`: 규칙·파서·풀이와 순수 표시 데이터 변환 등록
+- `meow/`, `sudoku/`: 퍼즐 모델·고유 검증·기법·알고리즘과 예제
+- `scripts/build_web.py`: 단일 웹 번들과 기존 주소의 연결 페이지 생성
+- `tests/common/`, `tests/meow/`, `tests/sudoku/`: 공통 계약과 퍼즐별 회귀 검사
 - `docs/meow.md`, `docs/sudoku.md`: 퍼즐별 사용법과 풀이 정책
 
-공통 코드를 수정한 뒤에는 전체 검사와 두 앱의 웹 빌드를 함께 실행합니다.
-통합 전 두 프로젝트의 Git 이력은 이 저장소에 보존되어 있습니다.
-
-공통 구현과 퍼즐 어댑터의 책임은 [구조 안내](docs/architecture.md)를 참고하세요.
-
-양쪽 앱은 방향키·Tab 이동, 결과 배지와 해 없음의 편집 복귀 방식을 공유합니다.
-알고리즘·퍼즐별 입력 규칙·숫자/후보 또는 고양이/색상 표현은 유지합니다.
-
-두 솔버의 결과는 공통 `SolveResult(outcome, run)`이며 화면까지 같은 객체로 전달합니다.
-재생은 가정 후보 선택·종료·복원을 같은 순서로 표시합니다.
+공통 구현과 퍼즐 정의의 책임은 [구조 안내](docs/architecture.md)를 참고하세요.
+두 프로젝트의 통합 전 Git 이력도 이 저장소에 보존되어 있습니다.

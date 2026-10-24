@@ -3,8 +3,8 @@ from pathlib import Path
 import pygame
 import pytest
 
+from puzzle_common import ui_style
 from puzzle_common import ui_style as shared_style
-from sudoku import ui_style
 
 
 def test_get_fonts_use_real_pretendard_weights() -> None:
@@ -28,7 +28,7 @@ def test_get_fonts_use_real_pretendard_weights() -> None:
     assert fonts.heading.style_name == "SemiBold"
     assert fonts.title.style_name == "SemiBold"
     assert not any(font.get_bold() for font in all_fonts)
-    assert fonts.candidate.get_point_size() == 15
+    assert fonts.candidate.get_point_size() == 13
     assert fonts.info.get_point_size() == 15
 
 

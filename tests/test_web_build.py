@@ -8,68 +8,44 @@ import pytest
 from scripts import build_web
 
 
-def _configure_fake_project(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> Path:
-    project_root = tmp_path / "project"
-    project_root.mkdir()
-    for app in ("meow", "sudoku"):
-        (project_root / f"main_{app}.py").write_text(
-            f"from {app}.app import PLUGIN\nfrom puzzle_common.app import run_app\n",
-            encoding="utf-8",
-        )
-        package = project_root / app
+def _configure_fake_project(monkeypatch, tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "main.py").write_text("import pygame\n", encoding="utf-8")
+    for name in ("meow", "sudoku", "puzzle_common"):
+        package = project / name
         package.mkdir()
         (package / "__init__.py").write_text("", encoding="utf-8")
-        (package / "puzzles.json").write_text("{}", encoding="utf-8")
-
-    common = project_root / "puzzle_common"
-    fonts = common / "assets" / "fonts"
+        (package / "data.json").write_text("{}", encoding="utf-8")
+    fonts = project / "puzzle_common/assets/fonts"
     fonts.mkdir(parents=True)
-    (common / "__init__.py").write_text("", encoding="utf-8")
-    (common / "runtime.py").write_text("FRAME_RATE = 60\n", encoding="utf-8")
-    for filename in (
+    for name in (
         "Pretendard-Regular.otf",
         "Pretendard-SemiBold.otf",
         "OFL-Pretendard.txt",
     ):
-        (fonts / filename).write_bytes(filename.encode())
+        (fonts / name).write_bytes(name.encode())
+    monkeypatch.setattr(build_web, "PROJECT_ROOT", project)
+    monkeypatch.setattr(build_web, "BUILD_ROOT", project / "build")
+    monkeypatch.setattr(build_web, "WEB_OUTPUT", project / "build/web")
+    return project
 
-    monkeypatch.setattr(build_web, "PROJECT_ROOT", project_root)
-    monkeypatch.setattr(build_web, "BUILD_ROOT", project_root / "build")
-    monkeypatch.setattr(build_web, "WEB_OUTPUT", project_root / "build" / "web")
-    return project_root
 
-
-@pytest.mark.parametrize(
-    ("app", "stage_name"),
-    [("meow", "meow-puzzle-solver"), ("sudoku", "simple-sudoku-solver")],
-)
-def test_stage_runtime_files_bundles_only_selected_app_and_shared_assets(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    app: str,
-    stage_name: str,
-) -> None:
+def test_staging_contains_both_puzzles_and_shared_assets_once(monkeypatch, tmp_path):
     project = _configure_fake_project(monkeypatch, tmp_path)
-    for package in (project / app, project / "puzzle_common"):
-        cache = package / "__pycache__"
+    for name in ("meow", "sudoku", "puzzle_common"):
+        cache = project / name / "__pycache__"
         cache.mkdir()
-        (cache / "module.pyc").write_bytes(b"bytecode")
-        (package / "module.pyo").write_bytes(b"bytecode")
-    (project / "README.md").write_text("docs", encoding="utf-8")
-    (project / "tests").mkdir()
-    (project / "tests" / "test_app.py").write_text("", encoding="utf-8")
-    sibling = project / "build" / "unrelated-build"
-    sibling.mkdir(parents=True)
-    (sibling / "keep.txt").write_text("keep", encoding="utf-8")
-    stage = project / "build" / stage_name
-    stage.mkdir()
-    (stage / "stale.py").write_text("old", encoding="utf-8")
+        (cache / "module.pyc").write_bytes(b"cache")
+        (project / name / "module.pyo").write_bytes(b"cache")
+    stage = project / "build/puzzle-solvers"
+    stage.mkdir(parents=True)
+    (stage / "stale.py").write_text("old")
+    sibling = project / "build/unrelated"
+    sibling.mkdir()
+    (sibling / "keep.txt").write_text("keep")
 
-    assert build_web.stage_runtime_files(app) == stage
-
+    assert build_web.stage_runtime_files() == stage
     files = {
         path.relative_to(stage).as_posix()
         for path in stage.rglob("*")
@@ -77,92 +53,40 @@ def test_stage_runtime_files_bundles_only_selected_app_and_shared_assets(
     }
     assert files == {
         "main.py",
-        f"{app}/__init__.py",
-        f"{app}/puzzles.json",
+        "meow/__init__.py",
+        "meow/data.json",
+        "sudoku/__init__.py",
+        "sudoku/data.json",
         "puzzle_common/__init__.py",
-        "puzzle_common/runtime.py",
+        "puzzle_common/data.json",
         "puzzle_common/assets/fonts/Pretendard-Regular.otf",
         "puzzle_common/assets/fonts/Pretendard-SemiBold.otf",
         "puzzle_common/assets/fonts/OFL-Pretendard.txt",
     }
-    assert (stage / "main.py").read_bytes() == (project / f"main_{app}.py").read_bytes()
-    assert (
-        stage / "puzzle_common/assets/fonts/Pretendard-Regular.otf"
-    ).read_bytes() == (
-        project / "puzzle_common/assets/fonts/Pretendard-Regular.otf"
-    ).read_bytes()
-    assert (sibling / "keep.txt").read_text(encoding="utf-8") == "keep"
+    assert (stage / "main.py").read_bytes() == (project / "main.py").read_bytes()
+    assert (sibling / "keep.txt").is_file()
 
 
-@pytest.mark.parametrize("missing", ["main_meow.py", "meow", "puzzle_common"])
-def test_staging_validates_runtime_before_removing_previous_build(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    missing: str,
-) -> None:
+@pytest.mark.parametrize("missing", ("main.py", "meow", "sudoku", "puzzle_common"))
+def test_invalid_runtime_preserves_previous_stage(monkeypatch, tmp_path, missing):
     project = _configure_fake_project(monkeypatch, tmp_path)
-    path = project / missing
-    if path.is_dir():
-        shutil.rmtree(path)
+    target = project / missing
+    if target.is_dir():
+        shutil.rmtree(target)
     else:
-        path.unlink()
-    stage = project / "build" / "meow-puzzle-solver"
+        target.unlink()
+    stage = project / "build/puzzle-solvers"
     stage.mkdir(parents=True)
-    (stage / "keep.txt").write_text("keep", encoding="utf-8")
-
+    (stage / "keep.txt").write_text("keep")
     with pytest.raises(FileNotFoundError):
-        build_web.stage_runtime_files("meow")
-
+        build_web.stage_runtime_files()
     assert (stage / "keep.txt").is_file()
 
 
-@pytest.mark.parametrize("app", ["", "../outside", "meow/../../outside", "unknown"])
-@pytest.mark.parametrize("operation", ["stage_runtime_files", "pygbag_command"])
-def test_build_operations_reject_apps_outside_the_whitelist(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    app: str,
-    operation: str,
-) -> None:
-    _configure_fake_project(monkeypatch, tmp_path)
-
-    with pytest.raises(ValueError):
-        getattr(build_web, operation)(app)
-
-
-@pytest.mark.parametrize(
-    ("app", "stage_name", "width", "package", "title"),
-    [
-        (
-            "meow",
-            "meow-puzzle-solver",
-            "980",
-            "io.github.june2358.meow_puzzle_solver",
-            "MEOW — Queens Puzzle Solver",
-        ),
-        (
-            "sudoku",
-            "simple-sudoku-solver",
-            "960",
-            "io.github.june2358.simple_sudoku_solver",
-            "Sudoku Solver",
-        ),
-    ],
-)
-def test_pygbag_command_preserves_each_apps_identity_and_web_target(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    app: str,
-    stage_name: str,
-    width: str,
-    package: str,
-    title: str,
-) -> None:
+def test_command_builds_one_shared_runtime(monkeypatch, tmp_path):
     project = _configure_fake_project(monkeypatch, tmp_path)
-
-    command = build_web.pygbag_command(app)
-
-    assert command[-1] == str(project / "build" / stage_name)
+    command = build_web.pygbag_command()
+    assert command[-1] == str(project / "build/puzzle-solvers")
     assert command[1:3] == ["-m", "pygbag"]
     assert "--build" in command
     assert "--no_opt" in command
@@ -170,164 +94,133 @@ def test_pygbag_command_preserves_each_apps_identity_and_web_target(
         ("--PYBUILD", "3.12"),
         ("--ume_block", "0"),
         ("--can_close", "1"),
-        ("--width", width),
-        ("--height", "680"),
-        ("--app_name", stage_name),
-        ("--package", package),
-        ("--title", title),
+        ("--width", "1010"),
+        ("--height", "700"),
+        ("--app_name", "puzzle-solvers"),
+        ("--package", "io.github.june2358.puzzle_solvers"),
+        ("--title", "Puzzle Solvers"),
     ):
         assert command[command.index(option) + 1] == value
 
 
-def test_build_web_publishes_both_generated_apps_and_a_korean_selection_page(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
+def test_build_publishes_one_apk_with_compatibility_redirects(monkeypatch, tmp_path):
     project = _configure_fake_project(monkeypatch, tmp_path)
     monkeypatch.delenv("PYTHONUTF8", raising=False)
-    web = project / "build" / "web"
-    for folder in (web, web / "meow", web / "sudoku"):
-        folder.mkdir(parents=True, exist_ok=True)
-        (folder / "stale.txt").write_text("old", encoding="utf-8")
-    calls: list[SimpleNamespace] = []
+    web = project / "build/web"
+    web.mkdir(parents=True)
+    (web / "stale.txt").write_text("stale")
+    calls = []
 
-    def fake_run(command, *, cwd, env, check):  # noqa: ANN001, ANN202
+    def fake_run(command, *, cwd, env, check):
         calls.append(SimpleNamespace(command=command, cwd=cwd, env=env, check=check))
-        stage = Path(command[-1])
-        output = stage / "build" / "web"
+        output = Path(command[-1]) / "build/web"
         output.mkdir(parents=True)
-        (output / "index.html").write_text("<html></html>", encoding="utf-8")
-        (output / f"{stage.name}.apk").write_bytes(b"apk")
-        (output / "runtime.js").write_text("// runtime", encoding="utf-8")
+        (output / "index.html").write_text("<html>shared app</html>", encoding="utf-8")
+        (output / "puzzle-solvers.apk").write_bytes(b"apk")
+        (output / "runtime.js").write_text("// runtime")
 
     monkeypatch.setattr(build_web.subprocess, "run", fake_run)
-
     build_web.build_web()
-
-    assert [Path(call.command[-1]).name for call in calls] == [
-        "meow-puzzle-solver",
-        "simple-sudoku-solver",
-    ]
-    assert all(call.cwd == project and call.check is True for call in calls)
-    assert all(call.env["PYTHONUTF8"] == "1" for call in calls)
+    assert len(calls) == 1
+    assert calls[0].cwd == project and calls[0].check is True
+    assert calls[0].env["PYTHONUTF8"] == "1"
     assert {
         path.relative_to(web).as_posix() for path in web.rglob("*") if path.is_file()
     } == {
         "index.html",
+        "puzzle-solvers.apk",
+        "runtime.js",
         "meow/index.html",
-        "meow/meow-puzzle-solver.apk",
-        "meow/runtime.js",
         "sudoku/index.html",
-        "sudoku/simple-sudoku-solver.apk",
-        "sudoku/runtime.js",
     }
-    index = (web / "index.html").read_text(encoding="utf-8")
-    assert 'lang="ko"' in index
-    assert 'href="meow/"' in index
-    assert 'href="sudoku/"' in index
-    assert "퍼즐" in index
-    assert (project / "build/meow-puzzle-solver/main.py").is_file()
-    assert (project / "build/simple-sudoku-solver/main.py").is_file()
+    assert (web / "index.html").read_text() == "<html>shared app</html>"
+    for key in ("meow", "sudoku"):
+        redirect = (web / key / "index.html").read_text(encoding="utf-8")
+        assert f"url=../?puzzle={key}" in redirect
+        assert f'href="../?puzzle={key}"' in redirect
 
 
-@pytest.mark.parametrize(
-    "incomplete_app", ["meow-puzzle-solver", "simple-sudoku-solver"]
-)
-@pytest.mark.parametrize("missing", ["index.html", "APK"])
-def test_build_web_rejects_incomplete_output_without_removing_the_previous_site(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    incomplete_app: str,
-    missing: str,
-) -> None:
+@pytest.mark.parametrize("missing", ("index.html", "APK"))
+def test_incomplete_output_preserves_previous_site(monkeypatch, tmp_path, missing):
     project = _configure_fake_project(monkeypatch, tmp_path)
-    web = project / "build" / "web"
+    web = project / "build/web"
     web.mkdir(parents=True)
-    (web / "keep.txt").write_text("keep", encoding="utf-8")
+    (web / "keep.txt").write_text("keep")
 
-    def fake_run(command, **kwargs):  # noqa: ANN001, ANN202
-        stage = Path(command[-1])
-        output = stage / "build" / "web"
+    def fake_run(command, **kwargs):
+        output = Path(command[-1]) / "build/web"
         output.mkdir(parents=True)
-        if stage.name != incomplete_app or missing != "index.html":
-            (output / "index.html").write_text("<html></html>", encoding="utf-8")
-        if stage.name != incomplete_app or missing != "APK":
-            (output / f"{stage.name}.apk").write_bytes(b"apk")
+        if missing != "index.html":
+            (output / "index.html").write_text("<html></html>")
+        if missing != "APK":
+            (output / "puzzle-solvers.apk").write_bytes(b"apk")
 
     monkeypatch.setattr(build_web.subprocess, "run", fake_run)
-
     with pytest.raises(RuntimeError, match=missing):
         build_web.build_web()
-
-    assert (web / "keep.txt").read_text(encoding="utf-8") == "keep"
+    assert (web / "keep.txt").is_file()
 
 
 @pytest.mark.parametrize(
-    "relative_path", [".", "build", "build/..", "build/unknown", "../outside"]
+    "relative_path", (".", "build", "build/..", "build/unknown", "../outside")
 )
-def test_cleanup_rejects_project_build_and_unrecognized_paths(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    relative_path: str,
-) -> None:
+def test_cleanup_rejects_unrecognized_paths(monkeypatch, tmp_path, relative_path):
     project = _configure_fake_project(monkeypatch, tmp_path)
     build = project / "build"
     build.mkdir()
-    (project / "keep.txt").write_text("keep", encoding="utf-8")
-    (build / "keep.txt").write_text("keep", encoding="utf-8")
-    outside = tmp_path / "outside"
-    outside.mkdir()
-    (outside / "keep.txt").write_text("keep", encoding="utf-8")
-
+    (build / "keep.txt").write_text("keep")
     with pytest.raises(RuntimeError):
         build_web._clear_build_directory(project / relative_path)
-
-    assert (project / "keep.txt").is_file()
     assert (build / "keep.txt").is_file()
-    assert (outside / "keep.txt").is_file()
 
 
-def test_cleanup_rejects_a_build_symlink_to_external_files(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
+def test_cleanup_rejects_symlink_to_external_files(monkeypatch, tmp_path):
     project = _configure_fake_project(monkeypatch, tmp_path)
     outside = tmp_path / "outside"
     outside.mkdir()
-    (outside / "keep.txt").write_text("keep", encoding="utf-8")
-    stage = project / "build" / "meow-puzzle-solver"
+    (outside / "keep.txt").write_text("keep")
+    stage = project / "build/puzzle-solvers"
     stage.parent.mkdir()
     try:
         stage.symlink_to(outside, target_is_directory=True)
     except OSError:
         pytest.skip("Creating symlinks is unavailable on this system")
-
     with pytest.raises(RuntimeError):
         build_web._clear_build_directory(stage)
-
     assert (outside / "keep.txt").is_file()
 
 
-def test_pages_workflow_uploads_only_the_web_build() -> None:
-    workflow = (
-        build_web.PROJECT_ROOT / ".github" / "workflows" / "pages.yml"
-    ).read_text(encoding="utf-8")
-
-    assert "pages: write" in workflow
-    assert "id-token: write" in workflow
-    assert "name: github-pages" in workflow
-    assert "uv sync --locked --no-dev --group web" in workflow
-    assert "python scripts/build_web.py" in workflow
-    assert "actions/configure-pages@" in workflow
-    assert "actions/upload-pages-artifact@" in workflow
-    assert "actions/deploy-pages@" in workflow
-    assert "path: build/web" in workflow
+def test_pages_workflow_uploads_only_the_web_build():
+    workflow = (build_web.PROJECT_ROOT / ".github/workflows/pages.yml").read_text(
+        encoding="utf-8"
+    )
+    for instruction in (
+        "pages: write",
+        "id-token: write",
+        "name: github-pages",
+        "uv sync --locked --no-dev --group web",
+        "python scripts/build_web.py",
+        "actions/configure-pages@",
+        "actions/upload-pages-artifact@",
+        "actions/deploy-pages@",
+        "path: build/web",
+    ):
+        assert instruction in workflow
     assert "path: .\n" not in workflow
 
 
-def test_pygbag_is_pinned_in_the_non_default_web_group() -> None:
+def test_pygbag_is_pinned_in_non_default_web_group():
     project = tomllib.loads(
         (build_web.PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     )
-
     assert project["dependency-groups"]["web"] == ["pygbag==0.9.3"]
+
+
+@pytest.mark.parametrize("apk_names", (("first.apk", "second.apk"), ()))
+def test_generated_bundle_requires_exactly_one_apk(tmp_path, apk_names):
+    (tmp_path / "index.html").write_text("<html></html>")
+    for name in apk_names:
+        (tmp_path / name).write_bytes(b"apk")
+    (tmp_path / "directory.apk").mkdir()
+    with pytest.raises(RuntimeError, match="APK"):
+        build_web._validate_pygbag_output(tmp_path)

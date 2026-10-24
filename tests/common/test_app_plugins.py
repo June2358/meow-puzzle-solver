@@ -4,65 +4,59 @@ from dataclasses import replace
 import pygame
 import pytest
 
-from puzzle_common.app import PuzzlePlugin, run_app
+from puzzle_common import app
 from puzzle_common.engine import SolveResult
 
 
-@pytest.fixture(params=["meow", "sudoku"])
-def plugin_case(request):
-    if request.param == "meow":
-        from meow.app import PLUGIN
-        from meow.puzzle_catalog import load_preset
-
-        puzzle = load_preset("쉬움")
-    else:
-        from sudoku.app import PLUGIN
-        from sudoku.board import Puzzle
-        from sudoku.puzzle_catalog import load_puzzle_catalog
-
-        puzzle = Puzzle(load_puzzle_catalog()["쉬움"])
-    return PLUGIN, puzzle
-
-
-def test_registered_puzzles_use_the_same_flow_and_preserve_the_draft(
-    plugin_case, monkeypatch
+@pytest.mark.parametrize(
+    "registered", app.DEFINITIONS, ids=lambda definition: definition.key
+)
+def test_real_definitions_use_one_editor_player_and_native_solver(
+    monkeypatch, registered
 ):
-    plugin, puzzle = plugin_case
-    assert isinstance(plugin, PuzzlePlugin)
-    expected = plugin.solve(puzzle)
+    grid = next(iter(registered.presets.values()))
+    puzzle = registered.create(grid)
+    expected = registered.solve(puzzle)
     assert isinstance(expected, SolveResult)
-    inputs = iter((puzzle, None))
     drafts, received, lifecycle, solved = [], [], [], []
+    inputs = iter((puzzle, None))
 
-    def solve(puzzle_arg):
-        result = plugin.solve(puzzle_arg)
+    def solve(native):
+        result = registered.solve(native)
         solved.append(result)
         return result
 
+    definition = replace(registered, solve=solve)
+    monkeypatch.setattr(app, "DEFINITIONS", (definition,))
+
     class Editor:
-        def __init__(self, draft, error):
-            drafts.append((draft, error))
+        def __init__(self, selected, initial_grid, initial_error):
+            assert selected is definition
+            drafts.append((initial_grid, initial_error))
+            self.draft = grid
+            self.quit_requested = False
 
         async def run(self):
-            return next(inputs)
+            native = next(inputs)
+            self.quit_requested = native is None
+            return native
 
     class Player:
-        def __init__(self, puzzle_arg, data):
-            received.append((puzzle_arg, data))
+        def __init__(self, selected, native, result):
+            assert selected is definition
+            received.append((native, result))
 
         async def run(self):
-            return plugin.get_draft(puzzle)
+            return grid
 
+    monkeypatch.setattr(app, "InputDialog", Editor)
+    monkeypatch.setattr(app, "PlaybackScreen", Player)
     monkeypatch.setattr(pygame, "init", lambda: lifecycle.append("init"))
     monkeypatch.setattr(pygame, "quit", lambda: lifecycle.append("quit"))
     monkeypatch.setattr(pygame.key, "stop_text_input", lambda: None)
-    asyncio.run(
-        run_app(
-            replace(plugin, create_editor=Editor, create_player=Player, solve=solve)
-        )
-    )
+    asyncio.run(app.run_app(initial_key=registered.key))
 
-    assert drafts == [(None, None), (plugin.get_draft(puzzle), None)]
+    assert drafts == [(None, None), (grid, None)]
     assert received == [(puzzle, expected)]
     assert received[0][1] is solved[0]
     assert lifecycle == ["init", "quit"]

@@ -1,10 +1,11 @@
 """MEOW wording, effects, and region colors for a common playback frame."""
 
+from puzzle_common.board import region_palette
 from puzzle_common.coordinates import cell_name as _cell_name
 from puzzle_common.engine import LogicStatus, Outcome, SolveResult
-from puzzle_common.playback import PlaybackDetails
 from puzzle_common.presentation import FrameKind, PlaybackFrame
 from puzzle_common.ui_style import ORANGE
+from puzzle_common.view import PlaybackDetails
 
 from .model import Cell
 from .solve_types import (
@@ -13,7 +14,6 @@ from .solve_types import (
     SolverAlgorithm,
     UnitKind,
 )
-from .ui_style import region_palette
 
 _LOGIC_END_TITLES = {
     LogicStatus.SOLVED: "결정적 추론 완료",

@@ -3,7 +3,7 @@ from meow.presentation import describe_frame
 from meow.puzzle_catalog import load_preset
 from meow.solve_types import SOLVER_ALGORITHM_LABELS, Technique, UnitKind
 from meow.solver import solve
-from meow.ui_style import region_palette
+from puzzle_common.board import region_palette
 from puzzle_common.engine import LogicStatus
 from puzzle_common.presentation import FrameKind, build_frames
 

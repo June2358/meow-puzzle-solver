@@ -1,11 +1,13 @@
-"""One input screen with puzzle-specific drawing, editing and validation hooks."""
+"""One definition-driven editor with an immutable, normalized draft grid."""
 
 from collections.abc import Callable, Iterable
 
 import pygame
 
+from .board import draw_board
 from .clipboard import ClipboardError, copy_text, paste_text
 from .layout import BOARD_AREA, GRID_START_Y, MARGIN, get_board_layout
+from .puzzle import PuzzleDefinition
 from .runtime import next_frame
 from .ui_components import Button, draw_panel
 from .ui_style import (
@@ -19,10 +21,13 @@ from .ui_style import (
     RED,
     SURFACE_HOVER,
     SURFACE_SUBTLE,
+    WHITE,
     Fonts,
     configure_display,
+    get_fonts,
     wrap_text,
 )
+from .view import Cell, Grid
 from .web_text_dialog import WebTextDialog, WebTextDialogError, is_web_runtime
 
 _PANEL_PADDING = 18
@@ -30,35 +35,46 @@ _BUTTON_HEIGHT = 40
 _BUTTON_SPACING = 9
 
 
-class InputDialog[PuzzleT]:
-    """Own the input UI; subclasses supply the real puzzle rules and content."""
+class InputDialog:
+    """Edit either puzzle using its data and semantic callbacks."""
 
-    title: str
-    prompt: str
-    json_description: str
-    direct_instructions: tuple[str, ...]
-    parse_error: type[Exception]
     start_keys = (pygame.K_RETURN, pygame.K_KP_ENTER)
 
     def __init__(
         self,
-        fonts: Fonts,
-        preset_names: tuple[str, ...],
+        definition: PuzzleDefinition,
+        initial_grid: object | None = None,
         initial_error: str | None = None,
-        *,
-        board_size: int,
     ) -> None:
-        self._update_grid_layout(board_size)
+        self.definition = definition
+        self.title = f"{definition.title} · 문제 입력"
+        self.prompt = definition.prompt
+        self.json_description = "복사한 퍼즐 JSON을 붙여넣고 불러오기를 누르세요."
+        self.draft = definition.normalize(
+            initial_grid
+            if initial_grid is not None
+            else tuple(
+                (definition.empty,) * definition.default_size
+                for _ in range(definition.default_size)
+            )
+        )
+        self._update_grid_layout(len(self.draft))
         self.dialog_width = self.layout.window_size[0]
         self.screen = configure_display(self.layout.window_size, self.title)
-        self.fonts = fonts
-        self.preset_names = preset_names
+        self.fonts: Fonts = get_fonts()
+        self.preset_names = tuple(definition.presets)
         self.panel_x = self.layout.panel_rect.x
         self.panel_width = self.layout.panel_rect.width
         self.panel_inner_x = self.panel_x + _PANEL_PADDING
         self.panel_inner_width = self.panel_width - 2 * _PANEL_PADDING
         self.selected_cell: tuple[int, int] | None = None
         self.running = True
+        self.quit_requested = False
+        self.size_text = str(len(self.draft))
+        self.size_focused = False
+        self._replace_size_on_digit = False
+        self._dragging = False
+        self._drag_value: int | str | None = definition.empty
         self.validation_error = initial_error
         self.notice_message: str | None = None
         self._web_text_dialog: WebTextDialog | None = None
@@ -89,7 +105,7 @@ class InputDialog[PuzzleT]:
 
     def _init_buttons(self) -> None:
         gap = _BUTTON_SPACING
-        columns = min(3, len(self.preset_names))
+        columns = max(1, min(3, len(self.preset_names)))
         width = (self.panel_inner_width - (columns - 1) * gap) // columns
         self.preset_buttons = [
             self._button(
@@ -103,7 +119,12 @@ class InputDialog[PuzzleT]:
             )
             for index, name in enumerate(self.preset_names)
         ]
-        action_y = self._init_editor_controls(self.preset_buttons[-1].rect.bottom + 18)
+        preset_bottom = (
+            self.preset_buttons[-1].rect.bottom
+            if self.preset_buttons
+            else GRID_START_Y + 42
+        )
+        action_y = self._init_editor_controls(preset_bottom + 18)
         width = (self.panel_inner_width - gap) // 2
         labels = (
             ("프롬프트 보기", "JSON 입력")
@@ -134,7 +155,15 @@ class InputDialog[PuzzleT]:
         )
 
     def _init_editor_controls(self, y: int) -> int:
-        return y
+        self.size_field_rect = pygame.Rect(self.panel_inner_x + 52, y, 58, 40)
+        variable_size = self.definition.size_range[0] != self.definition.size_range[1]
+        x = self.size_field_rect.right + 9 if variable_size else self.panel_inner_x
+        self.new_grid_button = self._button(
+            pygame.Rect(x, y, self.panel_inner_x + self.panel_inner_width - x, 40),
+            "빈 격자 만들기",
+        )
+        self.editor_buttons = [self.new_grid_button]
+        return y + _BUTTON_HEIGHT + 18
 
     def _show_error(self, message: str) -> None:
         self.validation_error = message
@@ -155,7 +184,13 @@ class InputDialog[PuzzleT]:
         draw_panel(
             self.screen, pygame.Rect(MARGIN, GRID_START_Y, BOARD_AREA, BOARD_AREA)
         )
-        self._draw_grid()
+        draw_board(
+            self.screen,
+            self.layout,
+            self.definition.editor_view(self.draft),
+            self.fonts,
+            selected_cell=self.selected_cell,
+        )
         self._draw_panel()
         pygame.display.flip()
 
@@ -193,10 +228,34 @@ class InputDialog[PuzzleT]:
 
     @property
     def progress_text(self) -> str:
-        return ""
+        count = sum(
+            value != self.definition.empty for row in self.draft for value in row
+        )
+        return f"입력 {count}/{self.board_size * self.board_size}"
 
     def _draw_editor_controls(self) -> None:
-        pass
+        if self.definition.size_range[0] == self.definition.size_range[1]:
+            return
+        label = self.fonts.info.render("크기 N", True, BLACK)
+        self.screen.blit(
+            label,
+            label.get_rect(midleft=(self.panel_inner_x, self.size_field_rect.centery)),
+        )
+        pygame.draw.rect(
+            self.screen,
+            WHITE if self.size_focused else SURFACE_SUBTLE,
+            self.size_field_rect,
+            border_radius=8,
+        )
+        pygame.draw.rect(
+            self.screen,
+            ACCENT if self.size_focused else BORDER,
+            self.size_field_rect,
+            width=2 if self.size_focused else 1,
+            border_radius=8,
+        )
+        text = self.fonts.heading.render(self.size_text, True, BLACK)
+        self.screen.blit(text, text.get_rect(center=self.size_field_rect.center))
 
     def _draw_instructions(self) -> None:
         y = self.start_button.rect.bottom + 24
@@ -212,9 +271,10 @@ class InputDialog[PuzzleT]:
             else "JSON 버튼 또는 Ctrl+V로 붙여넣기"
         )
         for text in (
-            *self.direct_instructions,
+            f"{self.definition.symbols[0]}~{self.definition.symbols[-1]} 입력 · 0/Delete/Backspace 삭제",
+            "화살표/Tab 이동 · 채운 칸에서 드래그",
             json_instruction,
-            "Enter 시작 · Esc 종료",
+            "Enter 시작 · Esc 퍼즐 선택",
         ):
             for line in wrap_text(f"• {text}", self.fonts.info, self.panel_inner_width):
                 self.screen.blit(
@@ -240,11 +300,14 @@ class InputDialog[PuzzleT]:
             )
             y += 20
 
-    def _handle_events(self, events: Iterable[pygame.event.Event]) -> PuzzleT | None:
+    def _handle_events(self, events: Iterable[pygame.event.Event]) -> object | None:
+        events = tuple(events)
+        # A close request wins even when Enter or a modal action was queued first.
+        if any(event.type == pygame.QUIT for event in events):
+            self.quit_requested = True
+            self.running = False
+            return None
         for event in events:
-            if event.type == pygame.QUIT:
-                self.running = False
-                return None
             if not self.running or self._web_text_dialog is not None:
                 continue
             self._handle_editor_event(event)
@@ -259,9 +322,19 @@ class InputDialog[PuzzleT]:
         return None
 
     def _handle_editor_event(self, event: pygame.event.Event) -> None:
-        pass
+        if event.type == pygame.WINDOWFOCUSLOST or (
+            event.type == pygame.MOUSEBUTTONUP and event.button == 1
+        ):
+            self._dragging = False
+        elif event.type == pygame.MOUSEMOTION and self._dragging:
+            buttons = getattr(event, "buttons", ())
+            if buttons and buttons[0]:
+                cell = self.layout.cell_at(event.pos)
+                if cell is not None:
+                    self.selected_cell = cell
+                    self._set_cell(cell, self._drag_value)
 
-    def _handle_mouse_click(self, position: tuple[int, int]) -> PuzzleT | None:
+    def _handle_mouse_click(self, position: tuple[int, int]) -> object | None:
         if self._handle_editor_click(position):
             return None
         for index, button in enumerate(self.preset_buttons):
@@ -277,12 +350,26 @@ class InputDialog[PuzzleT]:
         return None
 
     def _handle_editor_click(self, position: tuple[int, int]) -> bool:
+        self.size_focused = False
+        self._dragging = False
+        if self.new_grid_button.is_clicked(position):
+            self._apply_size()
+            return True
+        if self.definition.size_range[0] != self.definition.size_range[
+            1
+        ] and self.size_field_rect.collidepoint(position):
+            self.size_focused = True
+            self._replace_size_on_digit = True
+            return True
         cell = self.layout.cell_at(position)
         if cell is not None:
             self.selected_cell = cell
+            self._drag_value = self.draft[cell[0]][cell[1]]
+            self._dragging = self._drag_value != self.definition.empty
+            return True
         return False
 
-    def _handle_keydown(self, event: pygame.event.Event) -> PuzzleT | None:
+    def _handle_keydown(self, event: pygame.event.Event) -> object | None:
         if event.key == pygame.K_v and event.mod & pygame.KMOD_CTRL:
             self._handle_json_action()
         elif event.key == pygame.K_ESCAPE:
@@ -292,6 +379,116 @@ class InputDialog[PuzzleT]:
         elif not self._handle_editor_key(event) and event.key in self.start_keys:
             return self._handle_start()
         return None
+
+    def _handle_editor_key(self, event: pygame.event.Event) -> bool:
+        if self.size_focused:
+            if event.key in self.start_keys:
+                self._apply_size()
+            elif event.key == pygame.K_TAB:
+                self.size_focused = False
+                self.selected_cell = self.selected_cell or (0, 0)
+            elif event.key == pygame.K_BACKSPACE:
+                self.size_text = (
+                    "" if self._replace_size_on_digit else self.size_text[:-1]
+                )
+                self._replace_size_on_digit = False
+            else:
+                text = self._key_text(event)
+                if len(text) == 1 and "0" <= text <= "9":
+                    self.size_text = (
+                        text if self._replace_size_on_digit else self.size_text + text
+                    )[:2]
+                    self._replace_size_on_digit = False
+            return True
+        if self._handle_grid_navigation(event):
+            return True
+        if self.selected_cell is None:
+            return False
+        if event.key in (pygame.K_DELETE, pygame.K_BACKSPACE, pygame.K_0, pygame.K_KP0):
+            self._set_cell(self.selected_cell, self.definition.empty)
+        else:
+            text = self._key_text(event)
+            for symbol in self.definition.symbols:
+                if text == str(symbol):
+                    self._set_cell(self.selected_cell, symbol)
+                    break
+        return False
+
+    @staticmethod
+    def _key_text(event: pygame.event.Event) -> str:
+        keypad = (
+            pygame.K_KP0,
+            pygame.K_KP1,
+            pygame.K_KP2,
+            pygame.K_KP3,
+            pygame.K_KP4,
+            pygame.K_KP5,
+            pygame.K_KP6,
+            pygame.K_KP7,
+            pygame.K_KP8,
+            pygame.K_KP9,
+        )
+        if event.key in keypad:
+            return str(keypad.index(event.key))
+        if pygame.K_0 <= event.key <= pygame.K_9:
+            return str(event.key - pygame.K_0)
+        return getattr(event, "unicode", "").upper()
+
+    def _set_cell(self, cell: Cell, value: int | str | None) -> None:
+        row, column = cell
+        if self.draft[row][column] == value:
+            return
+        rows = [list(row) for row in self.draft]
+        rows[row][column] = value
+        self.draft = self.definition.normalize(rows)
+        self._clear_message()
+
+    def _replace_draft(self, grid: object, notice: str) -> None:
+        draft: Grid = self.definition.normalize(grid)
+        self._update_grid_layout(len(draft))
+        self.draft = draft
+        self.selected_cell = None
+        self.size_text = str(len(draft))
+        self.size_focused = False
+        self._replace_size_on_digit = False
+        self._dragging = False
+        self._drag_value = self.definition.empty
+        self._show_notice(notice)
+
+    def _apply_size(self) -> None:
+        low, high = self.definition.size_range
+        if (
+            not self.size_text.isascii()
+            or not self.size_text.isdecimal()
+            or len(self.size_text) > 2
+            or not low <= int(self.size_text) <= high
+        ):
+            self._show_error(f"직접 입력 크기는 {low}~{high} 정수여야 합니다.")
+            return
+        size = int(self.size_text)
+        self._replace_draft(
+            tuple((self.definition.empty,) * size for _ in range(size)),
+            f"빈 {size}×{size} 격자를 만들었습니다.",
+        )
+
+    def _load_preset(self, index: int) -> None:
+        name = self.preset_names[index]
+        self._replace_draft(
+            self.definition.presets[name], f"{name} 문제를 불러왔습니다."
+        )
+
+    def _load_json_text(self, text: str) -> None:
+        self._replace_draft(
+            self.definition.parse(text),
+            "JSON을 불러왔습니다. 원본 이미지와 확인하세요.",
+        )
+
+    def _create_puzzle(self) -> object | None:
+        try:
+            return self.definition.create(self.draft)
+        except ValueError as error:
+            self._show_error(str(error))
+            return None
 
     def _handle_grid_navigation(self, event: pygame.event.Event) -> bool:
         if event.key == pygame.K_TAB:
@@ -366,12 +563,13 @@ class InputDialog[PuzzleT]:
     def _paste_json(self) -> None:
         try:
             self._load_json_text(paste_text())
-        except (ClipboardError, self.parse_error) as error:
+        except (ClipboardError, ValueError) as error:
             self._show_error(str(error))
 
     def _open_web_dialog(self, factory: Callable[[], WebTextDialog]) -> None:
         if self._web_text_dialog is not None:
             return
+        self._dragging = False
         try:
             self._web_text_dialog = factory()
         except WebTextDialogError as error:
@@ -390,7 +588,7 @@ class InputDialog[PuzzleT]:
                 return True
             try:
                 self._load_json_text(result.text)
-            except self.parse_error as error:
+            except ValueError as error:
                 dialog.show_error(str(error))
                 return False
             dialog.close()
@@ -414,14 +612,14 @@ class InputDialog[PuzzleT]:
             except WebTextDialogError as error:
                 self._show_error(str(error))
 
-    def _handle_start(self) -> PuzzleT | None:
+    def _handle_start(self) -> object | None:
         puzzle = self._create_puzzle()
         if puzzle is not None:
             self._clear_message()
             self.running = False
         return puzzle
 
-    async def run(self) -> PuzzleT | None:
+    async def run(self) -> object | None:
         clock = pygame.time.Clock()
         try:
             self.draw()

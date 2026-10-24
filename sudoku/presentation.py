@@ -2,9 +2,9 @@
 
 from puzzle_common.coordinates import cell_name as _cell_name
 from puzzle_common.engine import LogicStatus, Outcome, SolveResult
-from puzzle_common.playback import PlaybackDetails
 from puzzle_common.presentation import FrameKind, PlaybackFrame
 from puzzle_common.ui_style import ACCENT, ORANGE
+from puzzle_common.view import PlaybackDetails
 
 from .solve_types import (
     ContradictionKind,

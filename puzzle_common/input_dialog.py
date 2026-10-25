@@ -97,6 +97,8 @@ class InputDialog:
                 board_size,
                 panel_height=self.layout.panel_rect.height
                 + 32
+                + TOUCH_SIZE
+                + _BUTTON_SPACING
                 + rows * (TOUCH_SIZE + TOUCH_GAP),
             )
         self.board_size = board_size
@@ -117,6 +119,8 @@ class InputDialog:
         self.panel_inner_x = self.panel_x + _PANEL_PADDING
         self.panel_inner_width = self.panel_width - 2 * _PANEL_PADDING
         self._dragging = False
+        if not self.layout.stacked:
+            self._symbol_selected = False
         self._init_buttons()
         return True
 
@@ -224,6 +228,26 @@ class InputDialog:
             self.panel_inner_x + 52, y, 58, self.button_height
         )
         x = self.size_field_rect.right + 9
+        self.size_buttons = []
+        if self.layout.stacked:
+            if self.definition.size_range[0] != self.definition.size_range[1]:
+                self.size_buttons = [
+                    (
+                        delta,
+                        self._button(
+                            pygame.Rect(
+                                x + index * (TOUCH_SIZE + _BUTTON_SPACING),
+                                y,
+                                TOUCH_SIZE,
+                                self.button_height,
+                            ),
+                            label,
+                        ),
+                    )
+                    for index, (delta, label) in enumerate(((-1, "−"), (1, "+")))
+                ]
+            x = self.panel_inner_x
+            y += self.button_height + _BUTTON_SPACING
         self.new_grid_button = self._button(
             pygame.Rect(
                 x,
@@ -233,7 +257,9 @@ class InputDialog:
             ),
             "빈 격자 만들기",
         )
-        self.editor_buttons = [self.new_grid_button]
+        self.editor_buttons = [button for _, button in self.size_buttons] + [
+            self.new_grid_button
+        ]
         return y + self.button_height + 18
 
     def _show_error(self, message: str) -> None:
@@ -444,8 +470,13 @@ class InputDialog:
             if button.is_clicked(position):
                 self.selected_symbol = value
                 self._symbol_selected = True
-                if self.selected_cell is not None:
-                    self._set_cell(self.selected_cell, value)
+                return True
+        for delta, button in self.size_buttons:
+            if button.is_clicked(position):
+                low, high = self.definition.size_range
+                size = int(self.size_text or self.board_size) + delta
+                self.size_text = str(max(low, min(high, size)))
+                self._replace_size_on_digit = False
                 return True
         if self.new_grid_button.is_clicked(position):
             self._apply_size()
@@ -553,6 +584,7 @@ class InputDialog:
         self._replace_size_on_digit = False
         self._dragging = False
         self._drag_value = self.definition.empty
+        self._symbol_selected = False
         if changed:
             save_draft(self.definition, self.draft)
         self._show_notice(notice)

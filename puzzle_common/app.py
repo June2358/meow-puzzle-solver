@@ -144,6 +144,11 @@ async def run_app(initial_key: str | None = None) -> None:
                 if key is None:
                     return
             definition = definitions[key]
+            if sys.platform == "emscripten":
+                window = browser_window()
+                url = window.URL.new(window.location.href)
+                url.searchParams.set("puzzle", key)
+                window.history.replaceState(window.history.state, "", url.href)
             editor = InputDialog(definition, drafts.get(key), error)
             grid = await editor.run()
             drafts[key] = editor.draft

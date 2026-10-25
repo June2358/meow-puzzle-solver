@@ -112,7 +112,7 @@ def frame_view(definition, grid: Grid, frame, data: FrameData) -> BoardView:
                     if definition.regions is not None
                     and grid[row][column] != definition.empty
                     else ACCENT
-                    if definition.regions is None and cell in placed
+                    if cell in placed
                     else PRIMARY_DARK
                 )
                 marks = (

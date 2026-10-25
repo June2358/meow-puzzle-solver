@@ -205,23 +205,25 @@ class InputDialog:
             )
             for index, label in enumerate(labels)
         ]
-        self.start_button = self._button(
-            pygame.Rect(
-                self.panel_inner_x,
-                action_y + self.button_height + 18,
-                self.panel_inner_width,
-                self.button_height + 6,
-            ),
-            "풀이 시작",
-            primary=True,
-        )
+        self.start_button, self.select_button = [
+            self._button(
+                pygame.Rect(
+                    self.panel_inner_x + index * (width + gap),
+                    action_y + self.button_height + 18,
+                    width,
+                    self.button_height + 6,
+                ),
+                label,
+                primary=index == 0,
+            )
+            for index, label in enumerate(("풀이 시작", "퍼즐 선택"))
+        ]
 
     def _init_editor_controls(self, y: int) -> int:
         self.size_field_rect = pygame.Rect(
             self.panel_inner_x + 52, y, 58, self.button_height
         )
-        variable_size = self.definition.size_range[0] != self.definition.size_range[1]
-        x = self.size_field_rect.right + 9 if variable_size else self.panel_inner_x
+        x = self.size_field_rect.right + 9
         self.new_grid_button = self._button(
             pygame.Rect(
                 x,
@@ -287,6 +289,7 @@ class InputDialog:
             self.copy_prompt_button,
             self.paste_button,
             self.start_button,
+            self.select_button,
         ):
             button.draw(self.screen)
         if self.symbol_buttons:
@@ -314,8 +317,7 @@ class InputDialog:
         return f"입력 {count}/{self.board_size * self.board_size}"
 
     def _draw_editor_controls(self) -> None:
-        if self.definition.size_range[0] == self.definition.size_range[1]:
-            return
+        fixed_size = self.definition.size_range[0] == self.definition.size_range[1]
         label = self.fonts.info.render("크기 N", True, BLACK)
         self.screen.blit(
             label,
@@ -334,7 +336,11 @@ class InputDialog:
             width=2 if self.size_focused else 1,
             border_radius=8,
         )
-        text = self.fonts.heading.render(self.size_text, True, BLACK)
+        text = (
+            self.fonts.info.render(f"{self.board_size} 고정", True, GRAY)
+            if fixed_size
+            else self.fonts.heading.render(self.size_text, True, BLACK)
+        )
         self.screen.blit(text, text.get_rect(center=self.size_field_rect.center))
 
     def _draw_instructions(self) -> None:
@@ -427,6 +433,8 @@ class InputDialog:
             self._handle_json_action()
         elif self.start_button.is_clicked(position):
             return self._handle_start()
+        elif self.select_button.is_clicked(position):
+            self.running = False
         return None
 
     def _handle_editor_click(self, position: tuple[int, int]) -> bool:
